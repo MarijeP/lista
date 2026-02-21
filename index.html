@@ -997,18 +997,14 @@
     let html = escHtml(str);
     html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    html = html.replace(/(^- .+(
-|$))+/gm, function(block) {
-      const items = block.trim().split('\n').map(function(l) { return '<li>' + l.replace(/^- /, '') + '</li>'; }).join('');
-      return '<ul>' + items + '</ul>';
-    });
-    html = html.replace(/(^\d+\. .+(
-|$))+/gm, function(block) {
-      const items = block.trim().split('\n').map(function(l) { return '<li>' + l.replace(/^\d+\. /, '') + '</li>'; }).join('');
-      return '<ol>' + items + '</ol>';
-    });
+    html = html.replace(/[*][*](.+?)[*][*]/g, '<strong>$1</strong>');
+    html = html.replace(/[*](.+?)[*]/g, '<em>$1</em>');
+    html = html.replace(/^- (.+)$/gm, '<li data-t="ul">$1</li>');
+    html = html.replace(/^[0-9]+[.] (.+)$/gm, '<li data-t="ol">$1</li>');
+    html = html.replace(/(<li data-t="ul">.*?<\/li>
+?)+/gs, function(b) { return '<ul>' + b.replace(/ data-t="ul"/g,'') + '</ul>'; });
+    html = html.replace(/(<li data-t="ol">.*?<\/li>
+?)+/gs, function(b) { return '<ol>' + b.replace(/ data-t="ol"/g,'') + '</ol>'; });
     html = html.replace(/
 
 +/g, '</p><p>');
