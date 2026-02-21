@@ -334,8 +334,17 @@
   .ingredient-row:last-child { border-bottom:none; }
   .ingredient-qty { color:var(--muted); min-width:80px; font-weight:300; }
 
-  .method-text { background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:16px; font-size:0.92rem; font-weight:300; line-height:1.7; white-space:pre-wrap; }
-  .notes-text { background:#fffdf7; border:1.5px solid #f0e8c8; border-radius:12px; padding:14px 16px; font-size:0.88rem; font-weight:300; line-height:1.6; color:#7a6a3a; white-space:pre-wrap; }
+  .method-text { background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:16px; font-size:0.92rem; font-weight:300; line-height:1.7; }
+  .method-text p, .notes-text p { margin-bottom: 0.6em; }
+  .method-text p:last-child, .notes-text p:last-child { margin-bottom: 0; }
+  .method-text ul, .method-text ol, .notes-text ul, .notes-text ol { padding-left: 1.4em; margin-bottom: 0.6em; }
+  .method-text li, .notes-text li { margin-bottom: 0.2em; }
+  .method-text strong, .notes-text strong { font-weight: 500; }
+  .method-text em, .notes-text em { font-style: italic; }
+  .method-text h2, .notes-text h2 { font-family: "DM Serif Display", serif; font-size: 1.05rem; font-weight: 400; margin: 0.8em 0 0.3em; }
+  .method-text h3, .notes-text h3 { font-size: 0.88rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0.8em 0 0.3em; }
+  .form-hint { font-size: 0.75rem; color: var(--muted); margin-top: 5px; font-weight: 300; }
+  .notes-text { background:#fffdf7; border:1.5px solid #f0e8c8; border-radius:12px; padding:14px 16px; font-size:0.88rem; font-weight:300; line-height:1.6; color:#7a6a3a; }
 
   .detail-actions { display:flex; gap:10px; margin-top:28px; padding-top:20px; border-top:1px solid var(--border); }
   .btn-secondary { padding:10px 18px; background:none; border:1.5px solid var(--border); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.88rem; color:var(--text); cursor:pointer; transition:border-color 0.2s,color 0.2s; }
@@ -371,6 +380,9 @@
 
   .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:white; padding:10px 20px; border-radius:10px; font-size:0.88rem; opacity:0; transition:opacity 0.3s,transform 0.3s; pointer-events:none; z-index:100; white-space:nowrap; }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .footer { text-align:center; padding:20px 16px 28px; }
+  .footer-name { font-family:'DM Serif Display',serif; font-style:italic; font-size:1rem; color:var(--border); letter-spacing:0.02em; }
 
   .config-banner { background:#fff8e6; border:1.5px solid #f0d080; border-radius:10px; padding:14px 16px; margin-bottom:24px; font-size:0.88rem; line-height:1.6; color:#7a5c00; }
   .config-banner strong { display:block; margin-bottom:4px; }
@@ -467,6 +479,7 @@
           <option value="Salads">Salads</option>
           <option value="Desserts">Desserts</option>
           <option value="Snacks">Snacks</option>
+          <option value="Condiments">Condiments</option>
           <option value="Drinks">Drinks</option>
         </select>
         <button class="btn-new-recipe" onclick="openNewRecipeForm()">+ New recipe</button>
@@ -505,6 +518,7 @@
           <option value="Salads">Salads</option>
           <option value="Desserts">Desserts</option>
           <option value="Snacks">Snacks</option>
+          <option value="Condiments">Condiments</option>
           <option value="Drinks">Drinks</option>
         </select>
       </div>
@@ -530,10 +544,12 @@
       <div class="form-field">
         <label>Method</label>
         <textarea id="rf-method" placeholder="Write your method here…" rows="6"></textarea>
+        <p class="form-hint">Supports markdown: **bold**, *italic*, - bullet, 1. numbered, ## Heading</p>
       </div>
       <div class="form-field">
         <label>Notes</label>
         <textarea id="rf-notes" placeholder="Tips, variations, serving suggestions…" rows="3"></textarea>
+        <p class="form-hint">Supports markdown: **bold**, *italic*, - bullet</p>
       </div>
       <div class="form-actions">
         <button class="btn-primary" style="width:auto;padding:11px 28px" onclick="saveRecipe()">Save recipe</button>
@@ -544,6 +560,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<footer class="footer"><span class="footer-name">shlist</span></footer>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -551,21 +568,7 @@
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getDatabase, ref, push, update, remove, onValue, off }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-
-  // ================================================================
-  // PASTE YOUR FIREBASE CONFIG HERE — replace every value below
-  // ================================================================
-  const firebaseConfig = {
-    apiKey: "AIzaSyCP8qyXDwXKjFcTvOrH5Y-PL9JoC-lzLi0",
-    authDomain: "shlist-7466f.firebaseapp.com",
-    databaseURL: "https://shlist-7466f-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "shlist-7466f",
-    storageBucket: "shlist-7466f.firebasestorage.app",
-    messagingSenderId: "678202976422",
-    appId: "1:678202976422:web:6ff000ebcd0909a217ec67",
-    measurementId: "G-EFWXV5029Q"
-  };
-  // ================================================================
+  import { firebaseConfig } from "./config.js";
 
   const isConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith('PASTE_'));
   if (!isConfigured) document.getElementById('config-banner').style.display = 'block';
@@ -800,8 +803,8 @@
          </ul>`
       : '';
 
-    const methodHtml = r.method ? `<div class="section-title">Method</div><div class="method-text">${escHtml(r.method)}</div>` : '';
-    const notesHtml = r.notes ? `<div class="section-title">Notes</div><div class="notes-text">${escHtml(r.notes)}</div>` : '';
+    const methodHtml = r.method ? `<div class="section-title">Method</div><div class="method-text">${renderMarkdown(r.method)}</div>` : '';
+    const notesHtml = r.notes ? `<div class="section-title">Notes</div><div class="notes-text">${renderMarkdown(r.notes)}</div>` : '';
 
     document.getElementById('recipe-detail-content').innerHTML = `
       <div class="recipe-detail-photo">
@@ -975,7 +978,7 @@
   };
 
   function categoryEmoji(cat) {
-    const map = { Breakfast:'🥞', Lunch:'🥗', Dinner:'🍽️', Baking:'🧁', Soups:'🍲', Salads:'🥙', Desserts:'🍰', Snacks:'🍿', Drinks:'🥤' };
+    const map = { Breakfast:'🥞', Lunch:'🥗', Dinner:'🍽️', Baking:'🧁', Soups:'🍲', Salads:'🥙', Desserts:'🍰', Snacks:'🍿', Drinks:'🥤', Condiments:'🫙' };
     return map[cat] || '🍳';
   }
 
@@ -988,6 +991,30 @@
 
   function escHtml(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderMarkdown(str) {
+    let html = escHtml(str);
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    html = html.replace(/(^- .+(
+|$))+/gm, function(block) {
+      const items = block.trim().split('\n').map(function(l) { return '<li>' + l.replace(/^- /, '') + '</li>'; }).join('');
+      return '<ul>' + items + '</ul>';
+    });
+    html = html.replace(/(^\d+\. .+(
+|$))+/gm, function(block) {
+      const items = block.trim().split('\n').map(function(l) { return '<li>' + l.replace(/^\d+\. /, '') + '</li>'; }).join('');
+      return '<ol>' + items + '</ol>';
+    });
+    html = html.replace(/
+
++/g, '</p><p>');
+    html = html.replace(/
+/g, '<br>');
+    return '<p>' + html + '</p>';
   }
 
   document.getElementById('item-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addItem(); });
