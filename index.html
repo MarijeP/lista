@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Shopping List</title>
+<title>shlist</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -212,7 +212,7 @@
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
   /* ── SHOPPING ── */
-  .add-form { display: flex; gap: 8px; margin-bottom: 28px; }
+  .add-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
 
   .add-form input[type="text"], .add-form select {
     padding: 12px 14px;
@@ -226,7 +226,7 @@
     transition: border-color 0.2s;
   }
 
-  .add-form input[type="text"] { flex: 1; }
+  .add-form input[type="text"] { flex: 1; min-width: 120px; }
   .add-form input[type="text"]:focus, .add-form select:focus { border-color: var(--accent); }
 
   .btn-add {
@@ -241,9 +241,14 @@
     cursor: pointer;
     transition: opacity 0.2s;
     white-space: nowrap;
+    flex: 1;
   }
 
   .btn-add:hover { opacity: 0.88; }
+
+  @media (min-width: 480px) {
+    .btn-add { flex: 0 0 auto; }
+  }
 
   .category-block { margin-bottom: 22px; animation: fadeIn 0.25s ease; }
 
@@ -394,7 +399,7 @@
 <!-- APP -->
 <div id="app-screen">
   <div class="tab-bar">
-    <span class="tab-bar-title">My List</span>
+
     <div class="tabs">
       <button class="tab active" id="tab-shopping" onclick="switchTab('shopping')">🛒 Shopping</button>
       <button class="tab" id="tab-recipes" onclick="switchTab('recipes')">🍳 Recipes</button>
