@@ -562,14 +562,14 @@
 <div class="toast" id="toast"></div>
 <footer class="footer"><span class="footer-name">shlist</span></footer>
 
+<script src="config.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, signOut as fbSignOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getDatabase, ref, push, update, remove, onValue, off }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-  import { firebaseConfig } from "./config.js";
-
+  const firebaseConfig = window.firebaseConfig || {};
   const isConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith('PASTE_'));
   if (!isConfigured) document.getElementById('config-banner').style.display = 'block';
 
@@ -994,23 +994,41 @@
   }
 
   function renderMarkdown(str) {
-    let html = escHtml(str);
-    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-    html = html.replace(/[*][*](.+?)[*][*]/g, '<strong>$1</strong>');
-    html = html.replace(/[*](.+?)[*]/g, '<em>$1</em>');
-    html = html.replace(/^- (.+)$/gm, '<li data-t="ul">$1</li>');
-    html = html.replace(/^[0-9]+[.] (.+)$/gm, '<li data-t="ol">$1</li>');
-    html = html.replace(/(<li data-t="ul">.*?<\/li>
-?)+/gs, function(b) { return '<ul>' + b.replace(/ data-t="ul"/g,'') + '</ul>'; });
-    html = html.replace(/(<li data-t="ol">.*?<\/li>
-?)+/gs, function(b) { return '<ol>' + b.replace(/ data-t="ol"/g,'') + '</ol>'; });
-    html = html.replace(/
+    if (!str) return '';
+    const lines = escHtml(str).split('\n');
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (line.startsWith('### ')) {
+        out.push('<h3>' + fmt(line.slice(4)) + '</h3>'); i++;
+      } else if (line.startsWith('## ')) {
+        out.push('<h2>' + fmt(line.slice(3)) + '</h2>'); i++;
+      } else if (line.startsWith('- ')) {
+        const items = [];
+        while (i < lines.length && lines[i].startsWith('- ')) {
+          items.push('<li>' + fmt(lines[i].slice(2)) + '</li>'); i++;
+        }
+        out.push('<ul>' + items.join('') + '</ul>');
+      } else if (line.match(/^[0-9]+[.] /)) {
+        const items = [];
+        while (i < lines.length && lines[i].match(/^[0-9]+[.] /)) {
+          items.push('<li>' + fmt(lines[i].replace(/^[0-9]+[.] /, '')) + '</li>'); i++;
+        }
+        out.push('<ol>' + items.join('') + '</ol>');
+      } else if (line.trim() === '') {
+        out.push('<br>'); i++;
+      } else {
+        out.push('<p>' + fmt(line) + '</p>'); i++;
+      }
+    }
+    return out.join('');
+  }
 
-+/g, '</p><p>');
-    html = html.replace(/
-/g, '<br>');
-    return '<p>' + html + '</p>';
+  function fmt(s) {
+    s = s.replace(/[*][*](.+?)[*][*]/g, '<strong>$1</strong>');
+    s = s.replace(/[*](.+?)[*]/g, '<em>$1</em>');
+    return s;
   }
 
   document.getElementById('item-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addItem(); });
