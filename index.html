@@ -436,7 +436,7 @@
       </div>
       <div class="add-form">
         <input type="text" id="item-input" placeholder="Add an item…" autocomplete="off">
-        <select id="category-select">
+        <select id="category-select" onchange="addItem()">
           <option value="Bakery">Bakery</option>
           <option value="Beverages">Beverages</option>
           <option value="Condiments">Condiments</option>
@@ -450,7 +450,6 @@
           <option value="Toiletries">Toiletries</option>
           <option value="Other">Other</option>
         </select>
-        <button class="btn-add" onclick="addItem()">Add</button>
       </div>
       <div id="active-list"></div>
       <button class="checked-toggle" id="checked-toggle" onclick="toggleChecked()" style="display:none">
@@ -663,11 +662,14 @@
   window.addItem = function() {
     if (!shoppingRef) return;
     const input = document.getElementById('item-input');
-    const cat = document.getElementById('category-select').value;
+    const sel = document.getElementById('category-select');
+    const cat = sel.value;
     const name = input.value.trim();
     if (!name) return;
     push(shoppingRef, { name, category: cat, checked: false });
-    input.value = ''; input.focus();
+    input.value = '';
+    sel.selectedIndex = 0;
+    input.focus();
   };
 
   window.toggleCheck = function(id) {
