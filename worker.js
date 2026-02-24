@@ -74,7 +74,7 @@ export default {
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: 'claude-haiku-4-5',
           max_tokens: 1500,
           system: `You are a recipe extraction assistant. Extract recipe details from webpage text and return ONLY valid JSON with no markdown, no backticks, no explanation.
 
