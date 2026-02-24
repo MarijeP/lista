@@ -378,6 +378,18 @@
 
   .form-actions { display:flex; gap:10px; margin-top:28px; }
 
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:200; display:flex; align-items:center; justify-content:center; padding:20px; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+  .modal-overlay.open { opacity:1; pointer-events:all; }
+  .modal { background:var(--surface); border-radius:16px; padding:28px 24px 24px; width:100%; max-width:400px; box-shadow:0 8px 40px rgba(0,0,0,0.12); transform:translateY(12px); transition:transform 0.2s; }
+  .modal-overlay.open .modal { transform:translateY(0); }
+  .modal h3 { font-family:'DM Serif Display',serif; font-size:1.3rem; font-weight:400; margin-bottom:18px; }
+  .modal .form-field { margin-bottom:14px; }
+  .modal .form-field label { display:block; font-size:0.75rem; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .modal .form-field input, .modal .form-field select { width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.92rem; background:var(--bg); color:var(--text); outline:none; transition:border-color 0.2s; }
+  .modal .form-field input:focus, .modal .form-field select:focus { border-color:var(--accent); }
+  .modal-actions { display:flex; gap:8px; margin-top:20px; }
+  .modal-actions .btn-primary { flex:1; width:auto; margin-top:0; padding:11px; }
+  .modal-actions .btn-secondary { padding:11px 18px; }
   .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:white; padding:10px 20px; border-radius:10px; font-size:0.88rem; opacity:0; transition:opacity 0.3s,transform 0.3s; pointer-events:none; z-index:100; white-space:nowrap; }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
@@ -558,6 +570,36 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="edit-modal" onclick="closeEditModal(event)">
+  <div class="modal">
+    <h3>Edit item</h3>
+    <div class="form-field">
+      <label>Item name</label>
+      <input type="text" id="edit-item-name" placeholder="Item name">
+    </div>
+    <div class="form-field">
+      <label>Category</label>
+      <select id="edit-item-category">
+        <option value="Bakery">Bakery</option>
+        <option value="Beverages">Beverages</option>
+        <option value="Condiments">Condiments</option>
+        <option value="Dairy">Dairy</option>
+        <option value="Fresh produce">Fresh produce</option>
+        <option value="Household">Household</option>
+        <option value="Meat">Meat</option>
+        <option value="Medication">Medication</option>
+        <option value="Pets">Pets</option>
+        <option value="Snacks">Snacks</option>
+        <option value="Toiletries">Toiletries</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="saveEditItem()">Save</button>
+      <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <footer class="footer"><span class="footer-name">shlist</span></footer>
 
@@ -721,6 +763,7 @@
               <li class="item">
                 <input type="checkbox" class="item-check" onchange="toggleCheck('${item.id}')">
                 <span class="item-name">${escHtml(item.name)}</span>
+                <button class="btn-icon" onclick="openEditItem('${item.id}')" title="Edit" style="color:var(--muted);font-size:0.85rem">✎</button>
                 <button class="btn-icon" onclick="deleteItem('${item.id}')" title="Remove">✕</button>
               </li>`).join('')}
           </ul></div>`;
@@ -744,6 +787,7 @@
               <li class="item checked">
                 <input type="checkbox" class="item-check" checked onchange="toggleCheck('${item.id}')">
                 <span class="item-name">${escHtml(item.name)}</span>
+                <button class="btn-icon" onclick="openEditItem('${item.id}')" title="Edit" style="color:var(--muted);font-size:0.85rem">✎</button>
                 <button class="btn-icon" onclick="deleteItem('${item.id}')" title="Remove">✕</button>
               </li>`).join('')}
           </ul></div>`;
@@ -1033,8 +1077,36 @@
     return s;
   }
 
+  let editingItemId = null;
+
+  window.openEditItem = function(id) {
+    const item = shoppingItems.find(i => i.id === id);
+    if (!item) return;
+    editingItemId = id;
+    document.getElementById('edit-item-name').value = item.name;
+    document.getElementById('edit-item-category').value = item.category || 'Other';
+    document.getElementById('edit-modal').classList.add('open');
+    setTimeout(() => document.getElementById('edit-item-name').select(), 50);
+  };
+
+  window.saveEditItem = function() {
+    if (!editingItemId || !db || !auth.currentUser) return;
+    const name = document.getElementById('edit-item-name').value.trim();
+    const category = document.getElementById('edit-item-category').value;
+    if (!name) return;
+    update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${editingItemId}`), { name, category });
+    closeEditModal();
+  };
+
+  window.closeEditModal = function(e) {
+    if (e && e.target !== document.getElementById('edit-modal')) return;
+    document.getElementById('edit-modal').classList.remove('open');
+    editingItemId = null;
+  };
+
   document.getElementById('item-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addItem(); });
   document.getElementById('login-password')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.signIn(); });
+  document.getElementById('edit-item-name')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.saveEditItem(); if (e.key === 'Escape') window.closeEditModal(); });
 </script>
 </body>
 </html>
