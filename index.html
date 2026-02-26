@@ -449,6 +449,14 @@
   .color-btn:hover { transform:scale(1.15); }
   .color-btn.selected { border-color:var(--text); }
 
+
+  /* ── STORES ── */
+  .store-filter-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  .store-filter-btn { padding:6px 14px; border-radius:20px; border:1.5px solid var(--border); background:none; font-family:'DM Sans',sans-serif; font-size:0.82rem; color:var(--muted); cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+  .store-filter-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .store-filter-btn.active { background:var(--accent); border-color:var(--accent); color:white; }
+  .item-store { font-size:0.72rem; font-weight:500; color:var(--muted); background:var(--bg); border:1.5px solid var(--border); border-radius:20px; padding:2px 8px; flex-shrink:0; white-space:nowrap; }
+
   .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:white; padding:10px 20px; border-radius:10px; font-size:0.88rem; opacity:0; transition:opacity 0.3s,transform 0.3s; pointer-events:none; z-index:100; white-space:nowrap; }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
@@ -526,6 +534,7 @@
           <option value="Toiletries">Toiletries</option>
         </select>
       </div>
+      <div class="store-filter-bar" id="store-filter-bar" style="display:none"></div>
       <div id="active-list"></div>
       <button class="checked-toggle" id="checked-toggle" onclick="toggleChecked()" style="display:none">
         <span id="checked-label">🗂 Checked off items</span>
@@ -569,7 +578,16 @@
     <div class="container">
       <div class="panel-header">
         <h2>Settings</h2>
-        <p class="subtitle">Manage your recipe tags</p>
+        <p class="subtitle">Manage stores and recipe tags</p>
+      </div>
+      <div class="settings-section">
+        <h3>Stores</h3>
+        <p class="section-desc">Add the stores you shop at to assign and filter list items.</p>
+        <div class="tags-manager" id="stores-manager"></div>
+        <div class="add-tag-form" style="margin-top:16px">
+          <input type="text" id="new-store-input" placeholder="Store name…" maxlength="30">
+          <button class="btn-add" style="padding:10px 16px;font-size:0.88rem" onclick="addStore()">Add store</button>
+        </div>
       </div>
       <div class="settings-section">
         <h3>Recipe Tags</h3>
@@ -690,6 +708,10 @@
         <option value="Other">Other</option>
       </select>
     </div>
+    <div class="form-field">
+      <label>Store</label>
+      <select id="edit-item-store"><option value="">Any store</option></select>
+    </div>
     <div class="modal-actions">
       <button class="btn-primary" onclick="saveEditItem()">Save</button>
       <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
@@ -726,8 +748,9 @@
   const auth = isConfigured ? getAuth(app) : null;
   const db = isConfigured ? getDatabase(app) : null;
 
-  let shoppingItems = [], recipes = [], userTags = [];
-  let shoppingRef = null, recipesRef = null, tagsRef = null;
+  let shoppingItems = [], recipes = [], userTags = [], userStores = [];
+  let shoppingRef = null, recipesRef = null, tagsRef = null, storesRef = null;
+  let activeStoreFilter = '';
   const TAG_COLORS = ['#2d6a4f','#e07b39','#9b59b6','#2980b9','#c0392b','#16a085','#d4a017','#7f8c8d'];
   let selectedColor = TAG_COLORS[0];
   let editingRecipeId = null, photoBase64 = null;
@@ -767,6 +790,15 @@
       renderRecipes();
     });
 
+    storesRef = ref(db, `users/${uid}/stores`);
+    onValue(storesRef, snap => {
+      const d = snap.val();
+      userStores = d ? Object.entries(d).map(([id,v]) => ({id,...v})) : [];
+      renderStoresManager();
+      renderStoreFilterBar();
+      renderStoreSelect();
+    });
+
     tagsRef = ref(db, `users/${uid}/tags`);
     onValue(tagsRef, snap => {
       const d = snap.val();
@@ -788,7 +820,8 @@
     if (shoppingRef) { off(shoppingRef); shoppingRef = null; }
     if (recipesRef) { off(recipesRef); recipesRef = null; }
     if (tagsRef) { off(tagsRef); tagsRef = null; }
-    shoppingItems = []; recipes = []; userTags = [];
+    if (storesRef) { off(storesRef); storesRef = null; }
+    shoppingItems = []; recipes = []; userTags = []; userStores = []; activeStoreFilter = '';
   }
 
   window.signIn = async function() {
@@ -825,6 +858,70 @@
     document.getElementById('panel-' + tab).classList.add('active');
     document.getElementById('recipe-detail').classList.remove('active');
     document.getElementById('recipe-form').classList.remove('active');
+  };
+
+
+  // ── Stores ──
+  function renderStoresManager() {
+    const mgr = document.getElementById('stores-manager');
+    if (!mgr) return;
+    if (userStores.length === 0) {
+      mgr.innerHTML = '<p style="color:var(--muted);font-size:0.88rem;font-weight:300">No stores yet — add one below!</p>';
+    } else {
+      mgr.innerHTML = userStores.map(s => `
+        <div class="tag-manager-row">
+          <span class="tag-name">${escHtml(s.name)}</span>
+          <button class="btn-icon" onclick="deleteStore('${s.id}')" title="Delete">✕</button>
+        </div>`).join('');
+    }
+  }
+
+  function renderStoreFilterBar() {
+    const bar = document.getElementById('store-filter-bar');
+    if (!bar) return;
+    if (userStores.length === 0) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    bar.innerHTML = `<button class="store-filter-btn${!activeStoreFilter ? ' active' : ''}" onclick="setStoreFilter('')">All</button>` +
+      userStores.map(s => `<button class="store-filter-btn${activeStoreFilter === s.id ? ' active' : ''}" onclick="setStoreFilter('${s.id}')">${escHtml(s.name)}</button>`).join('');
+  }
+
+  function renderStoreSelect(currentVal) {
+    const sel = document.getElementById('edit-item-store');
+    if (!sel) return;
+    const val = currentVal !== undefined ? currentVal : sel.value;
+    sel.innerHTML = '<option value="">Any store</option>' +
+      userStores.map(s => `<option value="${escHtml(s.id)}"${s.id === val ? ' selected' : ''}>${escHtml(s.name)}</option>`).join('');
+  }
+
+  window.setStoreFilter = function(storeId) {
+    activeStoreFilter = storeId;
+    renderStoreFilterBar();
+    renderShopping();
+  };
+
+  window.addStore = function() {
+    const input = document.getElementById('new-store-input');
+    const name = input.value.trim();
+    if (!name || !storesRef) return;
+    if (userStores.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+      showToast('Store already exists!'); return;
+    }
+    push(storesRef, { name });
+    input.value = '';
+  };
+
+  window.deleteStore = function(id) {
+    if (!storesRef) return;
+    if (!confirm('Delete this store? Items assigned to it will become unassigned.')) return;
+    if (auth.currentUser) {
+      remove(ref(db, `users/${auth.currentUser.uid}/stores/${id}`));
+      // Clear store from any items that had it
+      shoppingItems.forEach(item => {
+        if (item.store === id) {
+          update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${item.id}`), { store: '' });
+        }
+      });
+    }
   };
 
   // ── Shopping ──
@@ -868,7 +965,7 @@
   }
 
   function renderShopping() {
-    const active = shoppingItems.filter(i => !i.checked);
+    const active = shoppingItems.filter(i => !i.checked && (!activeStoreFilter || !i.store || i.store === activeStoreFilter));
     const checked = shoppingItems.filter(i => i.checked);
     const statsEl = document.getElementById('stats-text');
     if (statsEl) statsEl.textContent = shoppingItems.length === 0
@@ -894,6 +991,7 @@
                 <input type="checkbox" class="item-check" onchange="toggleCheck('${item.id}')">
                 ${item.qty ? `<span class="item-qty">${escHtml(item.qty)}</span>` : ''}
                 <span class="item-name">${escHtml(item.name)}</span>
+                ${item.store ? `<span class="item-store">${escHtml(item.store)}</span>` : ''}
                 <button class="btn-icon" onclick="openEditItem('${item.id}')" title="Edit" style="color:var(--muted);font-size:0.85rem">✎</button>
                 <button class="btn-icon" onclick="deleteItem('${item.id}')" title="Remove">✕</button>
               </li>`).join('')}
@@ -919,6 +1017,7 @@
                 <input type="checkbox" class="item-check" checked onchange="toggleCheck('${item.id}')">
                 ${item.qty ? `<span class="item-qty">${escHtml(item.qty)}</span>` : ''}
                 <span class="item-name">${escHtml(item.name)}</span>
+                ${item.store ? `<span class="item-store">${escHtml(item.store)}</span>` : ''}
                 <button class="btn-icon" onclick="openEditItem('${item.id}')" title="Edit" style="color:var(--muted);font-size:0.85rem">✎</button>
                 <button class="btn-icon" onclick="deleteItem('${item.id}')" title="Remove">✕</button>
               </li>`).join('')}
@@ -1422,6 +1521,7 @@
     document.getElementById('edit-item-qty').value = item.qty || '';
     document.getElementById('edit-item-name').value = item.name;
     document.getElementById('edit-item-category').value = item.category || 'Other';
+    renderStoreSelect(item.store || '');
     document.getElementById('edit-modal').classList.add('open');
     setTimeout(() => document.getElementById('edit-item-name').select(), 50);
   };
@@ -1431,8 +1531,9 @@
     const name = document.getElementById('edit-item-name').value.trim();
     const qty = document.getElementById('edit-item-qty').value.trim();
     const category = document.getElementById('edit-item-category').value;
+    const store = document.getElementById('edit-item-store')?.value || '';
     if (!name) return;
-    update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${editingItemId}`), { name, qty: qty || '', category });
+    update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${editingItemId}`), { name, qty: qty || '', category, store: store || '' });
     closeEditModal();
   };
 
