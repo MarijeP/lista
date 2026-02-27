@@ -625,6 +625,7 @@
       <button class="tab" id="tab-settings" onclick="switchTab('settings')">⚙️ Settings</button>
       <button class="tab" id="tab-account" onclick="switchTab('account')">👤 Account</button>
     </div>
+    <button class="btn-signout" onclick="signOut()">Sign out</button>
   </div>
 
   <!-- Lists home -->
@@ -808,7 +809,7 @@
           <h3>Change email</h3><span class="toggle-arrow">▼</span>
         </button>
         <div class="settings-section-body">
-          <p class="section-desc">You'll need to enter your current password to confirm.</p>
+          <p class="section-desc">We'll send a verification link to your new address. Your email won't change until you click it.</p>
           <div class="form-field" style="margin-bottom:12px">
             <label>New email address</label>
             <input type="email" id="account-new-email" placeholder="new@example.com">
@@ -853,17 +854,6 @@
         <div class="settings-section-body">
           <p class="section-desc">Download all your lists, recipes, stores and settings as a JSON file.</p>
           <button class="btn-primary" style="width:auto;padding:10px 22px" onclick="exportData()">⬇ Download my data</button>
-        </div>
-      </div>
-
-      <!-- Sign out -->
-      <div class="settings-section" id="section-signout">
-        <button class="settings-section-toggle" onclick="toggleSettingsSection('section-signout')">
-          <h3>Sign out</h3><span class="toggle-arrow">▼</span>
-        </button>
-        <div class="settings-section-body">
-          <p class="section-desc">Sign out of your account on this device.</p>
-          <button class="btn-secondary" style="padding:10px 22px" onclick="signOut()">Sign out</button>
         </div>
       </div>
 
@@ -1028,7 +1018,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, signOut as fbSignOut, onAuthStateChanged,
-    updateProfile, updateEmail as fbUpdateEmail, updatePassword as fbUpdatePassword,
+    updateProfile, verifyBeforeUpdateEmail, updatePassword as fbUpdatePassword,
     deleteUser, EmailAuthProvider, reauthenticateWithCredential }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getDatabase, ref, push, update, remove, onValue, off }
@@ -1229,16 +1219,15 @@
     if (!password) { setFeedback('email-feedback', 'Please enter your current password.', true); return; }
     try {
       await reauth(password);
-      await fbUpdateEmail(user, newEmail);
-      setFeedback('email-feedback', 'Email updated ✓', false);
-      document.getElementById('account-subtitle').textContent = newEmail;
+      await verifyBeforeUpdateEmail(user, newEmail);
+      setFeedback('email-feedback', `Verification email sent to ${newEmail}. Click the link to confirm the change.`, false);
       document.getElementById('account-new-email').value = '';
       document.getElementById('account-email-password').value = '';
     } catch(e) {
       const msg = e.code === 'auth/wrong-password' ? 'Incorrect password.'
         : e.code === 'auth/invalid-email' ? 'Invalid email address.'
         : e.code === 'auth/email-already-in-use' ? 'That email is already in use.'
-        : 'Failed to update email. Please try again.';
+        : 'Failed to send verification email. Please try again.';
       setFeedback('email-feedback', msg, true);
     }
   };
