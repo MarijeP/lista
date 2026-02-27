@@ -852,7 +852,7 @@
           <h3>Export data</h3><span class="toggle-arrow">▼</span>
         </button>
         <div class="settings-section-body">
-          <p class="section-desc">Download all your lists, recipes, stores and settings as a JSON file.</p>
+          <p class="section-desc">Download all your lists, recipes and stores as a plain text file.</p>
           <button class="btn-primary" style="width:auto;padding:10px 22px" onclick="exportData()">⬇ Download my data</button>
         </div>
       </div>
@@ -1261,17 +1261,101 @@
     const { get } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
     try {
       const snap = await get(ref(db, `users/${uid}`));
-      const data = {
-        exportDate: new Date().toISOString(),
-        email: user.email,
-        displayName: user.displayName || '',
-        data: snap.val() || {}
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const data = snap.val() || {};
+      const lines = [];
+      const date = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+
+      lines.push(`Lista export — ${date}`);
+      lines.push(`${user.email}`);
+      lines.push('');
+
+      // ── Lists ──
+      const lists = data.lists ? Object.values(data.lists) : [];
+      if (lists.length) {
+        lines.push('══════════════════════════════');
+        lines.push('SHOPPING LISTS');
+        lines.push('══════════════════════════════');
+        for (const list of lists) {
+          lines.push('');
+          lines.push(`${list.name || 'Untitled list'}`);
+          lines.push('─'.repeat((list.name || 'Untitled list').length));
+          // Get items for this list
+          const items = data.shoppingList
+            ? Object.values(data.shoppingList).filter(i => i.listId === list.id)
+            : [];
+          const unchecked = items.filter(i => !i.checked);
+          const checked = items.filter(i => i.checked);
+          if (unchecked.length === 0 && checked.length === 0) {
+            lines.push('  (empty)');
+          } else {
+            for (const item of unchecked) {
+              const qty = item.qty ? ` (${item.qty})` : '';
+              const cat = item.category ? ` [${item.category}]` : '';
+              lines.push(`  ☐ ${item.name}${qty}${cat}`);
+            }
+            if (checked.length) {
+              lines.push('  — checked off —');
+              for (const item of checked) {
+                const qty = item.qty ? ` (${item.qty})` : '';
+                lines.push(`  ☑ ${item.name}${qty}`);
+              }
+            }
+          }
+        }
+        lines.push('');
+      }
+
+      // ── Recipes ──
+      const recipes = data.recipes ? Object.values(data.recipes) : [];
+      if (recipes.length) {
+        lines.push('══════════════════════════════');
+        lines.push('RECIPES');
+        lines.push('══════════════════════════════');
+        for (const r of recipes) {
+          lines.push('');
+          lines.push(`${r.name || 'Untitled recipe'}`);
+          lines.push('─'.repeat((r.name || 'Untitled recipe').length));
+          if (r.category) lines.push(`Category: ${r.category}`);
+          if (r.servings) lines.push(`Servings: ${r.servings}`);
+          if (r.time) lines.push(`Time: ${r.time}`);
+          if (r.ingredients && r.ingredients.length) {
+            lines.push('');
+            lines.push('Ingredients:');
+            for (const ing of r.ingredients) {
+              const qty = ing.qty ? `${ing.qty} ` : '';
+              const unit = ing.unit ? `${ing.unit} ` : '';
+              lines.push(`  • ${qty}${unit}${ing.name || ''}`);
+            }
+          }
+          if (r.method) {
+            lines.push('');
+            lines.push('Method:');
+            lines.push(r.method.split('\n').map(l => `  ${l}`).join('\n'));
+          }
+          if (r.notes) {
+            lines.push('');
+            lines.push('Notes:');
+            lines.push(r.notes.split('\n').map(l => `  ${l}`).join('\n'));
+          }
+        }
+        lines.push('');
+      }
+
+      // ── Stores ──
+      const stores = data.stores ? Object.values(data.stores) : [];
+      if (stores.length) {
+        lines.push('══════════════════════════════');
+        lines.push('STORES');
+        lines.push('══════════════════════════════');
+        for (const s of stores) lines.push(`  • ${s.name}`);
+        lines.push('');
+      }
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `lista-export-${new Date().toISOString().slice(0,10)}.json`;
+      a.download = `lista-export-${new Date().toISOString().slice(0,10)}.txt`;
       a.click();
       URL.revokeObjectURL(url);
     } catch(e) {
