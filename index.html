@@ -263,6 +263,29 @@
 
   .btn-add:hover { opacity: 0.88; }
 
+  .btn-danger {
+    padding: 10px 22px;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-danger:hover { opacity: 0.85; }
+
+  .account-feedback {
+    margin-top: 10px;
+    font-size: 0.83rem;
+    font-weight: 400;
+    min-height: 18px;
+  }
+  .account-feedback.success { color: var(--accent); }
+  .account-feedback.error { color: var(--danger); }
+
   .dupe-warning {
     display: flex;
     align-items: center;
@@ -600,8 +623,8 @@
       <button class="tab active" id="tab-lists" onclick="switchTab('lists')">📋 Lists</button>
       <button class="tab" id="tab-recipes" onclick="switchTab('recipes')">🍳 Recipes</button>
       <button class="tab" id="tab-settings" onclick="switchTab('settings')">⚙️ Settings</button>
+      <button class="tab" id="tab-account" onclick="switchTab('account')">👤 Account</button>
     </div>
-    <button class="btn-signout" onclick="signOut()">Sign out</button>
   </div>
 
   <!-- Lists home -->
@@ -756,6 +779,113 @@
     </div>
   </div>
 
+  <!-- Account -->
+  <div class="tab-panel" id="panel-account">
+    <div class="container">
+      <div class="panel-header">
+        <h2>Account</h2>
+        <p class="subtitle" id="account-subtitle">Manage your account</p>
+      </div>
+
+      <!-- Change name -->
+      <div class="settings-section" id="section-name">
+        <button class="settings-section-toggle" onclick="toggleSettingsSection('section-name')">
+          <h3>Change name</h3><span class="toggle-arrow">▼</span>
+        </button>
+        <div class="settings-section-body">
+          <div class="form-field" style="margin-bottom:12px">
+            <label>Display name</label>
+            <input type="text" id="account-name" placeholder="Your name" maxlength="60">
+          </div>
+          <button class="btn-primary" style="width:auto;padding:10px 22px" onclick="updateName()">Save name</button>
+          <p class="account-feedback" id="name-feedback"></p>
+        </div>
+      </div>
+
+      <!-- Change email -->
+      <div class="settings-section" id="section-email">
+        <button class="settings-section-toggle" onclick="toggleSettingsSection('section-email')">
+          <h3>Change email</h3><span class="toggle-arrow">▼</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="section-desc">You'll need to enter your current password to confirm.</p>
+          <div class="form-field" style="margin-bottom:12px">
+            <label>New email address</label>
+            <input type="email" id="account-new-email" placeholder="new@example.com">
+          </div>
+          <div class="form-field" style="margin-bottom:12px">
+            <label>Current password</label>
+            <input type="password" id="account-email-password" placeholder="Your current password">
+          </div>
+          <button class="btn-primary" style="width:auto;padding:10px 22px" onclick="updateEmail()">Save email</button>
+          <p class="account-feedback" id="email-feedback"></p>
+        </div>
+      </div>
+
+      <!-- Change password -->
+      <div class="settings-section" id="section-password">
+        <button class="settings-section-toggle" onclick="toggleSettingsSection('section-password')">
+          <h3>Change password</h3><span class="toggle-arrow">▼</span>
+        </button>
+        <div class="settings-section-body">
+          <div class="form-field" style="margin-bottom:12px">
+            <label>Current password</label>
+            <input type="password" id="account-current-password" placeholder="Current password">
+          </div>
+          <div class="form-field" style="margin-bottom:12px">
+            <label>New password</label>
+            <input type="password" id="account-new-password" placeholder="New password (min 6 characters)">
+          </div>
+          <div class="form-field" style="margin-bottom:12px">
+            <label>Confirm new password</label>
+            <input type="password" id="account-confirm-password" placeholder="Confirm new password">
+          </div>
+          <button class="btn-primary" style="width:auto;padding:10px 22px" onclick="updatePassword()">Save password</button>
+          <p class="account-feedback" id="password-feedback"></p>
+        </div>
+      </div>
+
+      <!-- Export data -->
+      <div class="settings-section" id="section-export">
+        <button class="settings-section-toggle" onclick="toggleSettingsSection('section-export')">
+          <h3>Export data</h3><span class="toggle-arrow">▼</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="section-desc">Download all your lists, recipes, stores and settings as a JSON file.</p>
+          <button class="btn-primary" style="width:auto;padding:10px 22px" onclick="exportData()">⬇ Download my data</button>
+        </div>
+      </div>
+
+      <!-- Sign out -->
+      <div class="settings-section" id="section-signout">
+        <button class="settings-section-toggle" onclick="toggleSettingsSection('section-signout')">
+          <h3>Sign out</h3><span class="toggle-arrow">▼</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="section-desc">Sign out of your account on this device.</p>
+          <button class="btn-secondary" style="padding:10px 22px" onclick="signOut()">Sign out</button>
+        </div>
+      </div>
+
+      <!-- Delete account -->
+      <div class="settings-section" id="section-delete">
+        <button class="settings-section-toggle" onclick="toggleSettingsSection('section-delete')">
+          <h3>Delete account</h3><span class="toggle-arrow">▼</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="section-desc" style="color:var(--danger)">This permanently deletes your account and all your data. This cannot be undone.</p>
+          <div class="form-field" style="margin-bottom:12px">
+            <label>Enter your password to confirm</label>
+            <input type="password" id="account-delete-password" placeholder="Your current password">
+          </div>
+          <button class="btn-danger" onclick="deleteAccount()">Delete my account</button>
+          <p class="account-feedback" id="delete-feedback"></p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Recipe detail -->
   <div id="recipe-detail">
     <div class="container">
@@ -897,7 +1027,9 @@
 <script src="config.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, signOut as fbSignOut, onAuthStateChanged }
+  import { getAuth, signInWithEmailAndPassword, signOut as fbSignOut, onAuthStateChanged,
+    updateProfile, updateEmail as fbUpdateEmail, updatePassword as fbUpdatePassword,
+    deleteUser, EmailAuthProvider, reauthenticateWithCredential }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getDatabase, ref, push, update, remove, onValue, off }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
@@ -1041,6 +1173,142 @@
 
   window.signOut = async function() { await fbSignOut(auth); };
 
+  // ── Account panel ──
+  function renderAccountPanel() {
+    const user = auth.currentUser;
+    if (!user) return;
+    const sub = document.getElementById('account-subtitle');
+    if (sub) sub.textContent = user.email;
+    const nameInput = document.getElementById('account-name');
+    if (nameInput) nameInput.value = user.displayName || '';
+    // Clear all feedback
+    ['name-feedback','email-feedback','password-feedback','delete-feedback'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = ''; el.className = 'account-feedback'; }
+    });
+    // Clear sensitive inputs
+    ['account-new-email','account-email-password','account-current-password',
+     'account-new-password','account-confirm-password','account-delete-password'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+
+  function setFeedback(id, msg, isError) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'account-feedback ' + (isError ? 'error' : 'success');
+  }
+
+  async function reauth(password) {
+    const user = auth.currentUser;
+    const credential = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, credential);
+  }
+
+  window.updateName = async function() {
+    const user = auth.currentUser;
+    if (!user) return;
+    const name = document.getElementById('account-name').value.trim();
+    if (!name) { setFeedback('name-feedback', 'Please enter a name.', true); return; }
+    try {
+      await updateProfile(user, { displayName: name });
+      setFeedback('name-feedback', 'Name updated ✓', false);
+    } catch(e) {
+      setFeedback('name-feedback', 'Failed to update name.', true);
+    }
+  };
+
+  window.updateEmail = async function() {
+    const user = auth.currentUser;
+    if (!user) return;
+    const newEmail = document.getElementById('account-new-email').value.trim();
+    const password = document.getElementById('account-email-password').value;
+    if (!newEmail) { setFeedback('email-feedback', 'Please enter a new email.', true); return; }
+    if (!password) { setFeedback('email-feedback', 'Please enter your current password.', true); return; }
+    try {
+      await reauth(password);
+      await fbUpdateEmail(user, newEmail);
+      setFeedback('email-feedback', 'Email updated ✓', false);
+      document.getElementById('account-subtitle').textContent = newEmail;
+      document.getElementById('account-new-email').value = '';
+      document.getElementById('account-email-password').value = '';
+    } catch(e) {
+      const msg = e.code === 'auth/wrong-password' ? 'Incorrect password.'
+        : e.code === 'auth/invalid-email' ? 'Invalid email address.'
+        : e.code === 'auth/email-already-in-use' ? 'That email is already in use.'
+        : 'Failed to update email. Please try again.';
+      setFeedback('email-feedback', msg, true);
+    }
+  };
+
+  window.updatePassword = async function() {
+    const user = auth.currentUser;
+    if (!user) return;
+    const current = document.getElementById('account-current-password').value;
+    const next = document.getElementById('account-new-password').value;
+    const confirm = document.getElementById('account-confirm-password').value;
+    if (!current) { setFeedback('password-feedback', 'Please enter your current password.', true); return; }
+    if (next.length < 6) { setFeedback('password-feedback', 'New password must be at least 6 characters.', true); return; }
+    if (next !== confirm) { setFeedback('password-feedback', 'New passwords don\'t match.', true); return; }
+    try {
+      await reauth(current);
+      await fbUpdatePassword(user, next);
+      setFeedback('password-feedback', 'Password updated ✓', false);
+      document.getElementById('account-current-password').value = '';
+      document.getElementById('account-new-password').value = '';
+      document.getElementById('account-confirm-password').value = '';
+    } catch(e) {
+      const msg = e.code === 'auth/wrong-password' ? 'Incorrect current password.' : 'Failed to update password.';
+      setFeedback('password-feedback', msg, true);
+    }
+  };
+
+  window.exportData = async function() {
+    const user = auth.currentUser;
+    if (!user || !db) return;
+    const uid = user.uid;
+    const { get } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
+    try {
+      const snap = await get(ref(db, `users/${uid}`));
+      const data = {
+        exportDate: new Date().toISOString(),
+        email: user.email,
+        displayName: user.displayName || '',
+        data: snap.val() || {}
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lista-export-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      alert('Export failed. Please try again.');
+    }
+  };
+
+  window.deleteAccount = async function() {
+    const user = auth.currentUser;
+    if (!user) return;
+    const password = document.getElementById('account-delete-password').value;
+    if (!password) { setFeedback('delete-feedback', 'Please enter your password to confirm.', true); return; }
+    if (!confirm('Are you sure? This will permanently delete your account and all your data. This cannot be undone.')) return;
+    try {
+      await reauth(password);
+      // Delete all user data from Firebase first
+      await remove(ref(db, `users/${user.uid}`));
+      // Then delete the auth account
+      await deleteUser(user);
+    } catch(e) {
+      const msg = e.code === 'auth/wrong-password' ? 'Incorrect password.'
+        : 'Failed to delete account. Please try again.';
+      setFeedback('delete-feedback', msg, true);
+    }
+  };
+
   function friendlyAuthError(code) {
     if (['auth/invalid-credential','auth/wrong-password','auth/user-not-found'].includes(code))
       return 'Incorrect email or password. Please try again.';
@@ -1064,6 +1332,7 @@
     document.getElementById('list-view-shopping').style.display = 'none';
     document.getElementById('list-view-generic').style.display = 'none';
     if (tab === 'settings') renderSettingsCategoriesSection();
+    if (tab === 'account') renderAccountPanel();
   };
 
 
