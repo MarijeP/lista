@@ -1,18 +1,18 @@
-// lista Recipe Import Worker
+// Lista Recipe Import Worker
 // Fetches a recipe page and uses Claude to extract recipe details
-
-const ALLOWED_ORIGIN = request.headers.get('Origin') === 'http://localhost:8080' 
-  ? 'http://localhost:8080' 
-  : 'https://marijep.github.io';
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
 
 export default {
   async fetch(request, env) {
+    const origin = request.headers.get('Origin');
+    const allowedOrigin = (origin === 'http://localhost:8080' || origin === 'http://localhost:3000')
+      ? origin
+      : 'https://marijep.github.io';
+
+    const CORS_HEADERS = {
+      'Access-Control-Allow-Origin': allowedOrigin,
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    };
 
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
@@ -29,10 +29,10 @@ export default {
       url = body.url;
       if (!url) throw new Error('No URL provided');
     } catch (e) {
-      return json({ error: 'Invalid request body' }, 400);
+      return json({ error: 'Invalid request body' }, 400, CORS_HEADERS);
     }
 
-    // ── Step 1: Fetch the recipe page ──
+    // Step 1: Fetch the recipe page
     let pageText;
     try {
       const pageRes = await fetch(url, {
@@ -47,7 +47,6 @@ export default {
 
       const html = await pageRes.text();
 
-      // Strip tags to get plain text
       pageText = html
         .replace(/<script[\s\S]*?<\/script>/gi, '')
         .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -62,10 +61,10 @@ export default {
       if (pageText.length < 100) throw new Error('Could not extract text from page');
 
     } catch (e) {
-      return json({ error: 'Could not fetch the recipe page: ' + e.message }, 422);
+      return json({ error: 'Could not fetch the recipe page: ' + e.message }, 422, CORS_HEADERS);
     }
 
-    // ── Step 2: Call Claude to extract the recipe ──
+    // Step 2: Call Claude to extract the recipe
     let recipe;
     try {
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -109,19 +108,19 @@ Rules:
         else throw new Error('Could not parse Claude response');
       }
 
-      if (recipe.error) return json({ error: recipe.error }, 422);
+      if (recipe.error) return json({ error: recipe.error }, 422, CORS_HEADERS);
 
     } catch (e) {
-      return json({ error: 'Recipe extraction failed: ' + e.message }, 500);
+      return json({ error: 'Recipe extraction failed: ' + e.message }, 500, CORS_HEADERS);
     }
 
-    return json(recipe, 200);
+    return json(recipe, 200, CORS_HEADERS);
   }
 };
 
-function json(data, status = 200) {
+function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+    headers: { ...headers, 'Content-Type': 'application/json' }
   });
 }
