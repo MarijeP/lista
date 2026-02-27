@@ -1971,6 +1971,51 @@
   };
 
   document.getElementById('item-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addItem(); });
+
+  // ── Smart category auto-select ──
+  const CATEGORY_KEYWORDS = {
+    'Bakery':               ['bread','loaf','roll','bun','bagel','croissant','pita','wrap','sourdough','toast','crumpet','muffin','scone','brioche','focaccia','baguette','ciabatta','rye'],
+    'Beverages':            ['water','juice','coffee','tea','milk alt','oat milk','almond milk','soy milk','sparkling','soda','cordial','squash','kombucha','smoothie','energy drink','hot chocolate','cocoa','chai'],
+    'Booze':                ['wine','beer','lager','ale','cider','gin','vodka','rum','whisky','whiskey','champagne','prosecco','spirits','brandy','tequila','liqueur','port','stout','ipa'],
+    'Canned Food':          ['can','tinned','tin','baked beans','chickpeas','lentils','kidney beans','black beans','cannellini','tomato paste','passata','coconut milk','tuna','salmon','sardine','anchovies','soup','stock cube','bouillon'],
+    'Condiments':           ['sauce','ketchup','mustard','mayo','mayonnaise','vinegar','oil','olive oil','sesame oil','soy sauce','fish sauce','hot sauce','sriracha','worcestershire','relish','chutney','jam','honey','maple syrup','miso','tahini','pesto','hummus','dressing','aioli','hoisin','oyster sauce'],
+    'Dairy':                ['milk','cream','butter','cheese','yoghurt','yogurt','cheddar','mozzarella','parmesan','feta','brie','camembert','ricotta','cottage cheese','sour cream','creme fraiche','ghee','eggs','egg'],
+    'Fresh Produce':        ['apple','banana','orange','lemon','lime','mango','grape','strawberry','blueberry','raspberry','avocado','tomato','cucumber','lettuce','spinach','kale','broccoli','cauliflower','carrot','onion','garlic','ginger','potato','sweet potato','pepper','capsicum','zucchini','courgette','mushroom','celery','leek','asparagus','beetroot','radish','pear','peach','plum','cherry','watermelon','melon','pineapple','kiwi','herbs','basil','coriander','parsley','mint','rosemary','thyme','chilli','spring onion','cabbage','pumpkin','squash','corn','eggplant','aubergine','fennel','artichoke','sprouts','bok choy','pak choi','rocket','watercress','endive','fresh'],
+    'Household & Cleaning': ['detergent','washing up','dishwasher','laundry','bleach','cleaner','spray','mop','sponge','cloth','bin bag','bin liner','foil','cling wrap','cling film','baking paper','paper towel','toilet paper','tissue','batteries','lightbulb','candle','matches','zip lock','sandwich bag','rubber gloves','scrubber','polish','disinfectant','air freshener','washing powder','fabric softener'],
+    'Meat':                 ['chicken','beef','pork','lamb','turkey','bacon','ham','sausage','mince','steak','fillet','thigh','breast','ribs','brisket','chorizo','salami','prosciutto','pancetta','duck','veal','venison','fish','salmon','tuna','cod','hake','prawns','shrimp','crab','lobster','squid','mussels','clams','oysters','seafood','tofu','tempeh'],
+    'Medication':           ['paracetamol','ibuprofen','aspirin','antihistamine','vitamin','supplement','medicine','tablet','capsule','syrup','bandage','plaster','sunscreen','moisturiser','lotion','cream','ointment','drops','inhaler','pain relief'],
+    'Other Pantry Items':   ['pasta','rice','noodles','flour','sugar','salt','pepper','spice','cumin','paprika','turmeric','cinnamon','oregano','bay leaf','stock','broth','oats','cereal','granola','breadcrumbs','cornflour','cornstarch','baking powder','baking soda','bicarbonate','yeast','vanilla','chocolate','cocoa powder','icing sugar','brown sugar','lentils','quinoa','couscous','barley','polenta','semolina','dried','crackers','crispbread','popcorn'],
+    'Pets':                 ['dog food','cat food','pet food','dog treat','cat treat','kitty litter','cat litter','pet','bird seed','fish food','paw'],
+    'Snacks':               ['chips','crisps','biscuit','cookie','chocolate','lolly','candy','sweet','bar','nut','almond','cashew','peanut','walnut','trail mix','rice cake','dip','pretzel','popcorn','jerky','dried fruit'],
+    'Toiletries':           ['shampoo','conditioner','body wash','soap','toothpaste','toothbrush','floss','deodorant','antiperspirant','razor','shaving','perfume','cologne','makeup','foundation','lipstick','mascara','eyeliner','nail','cotton','face wash','toner','serum','moisturiser','sunscreen','toilet paper','sanitary','tampon','pad','condom','hand wash','hand sanitiser'],
+  };
+
+  // Build a flat lookup: keyword → category (longest match wins)
+  const _catLookup = [];
+  Object.entries(CATEGORY_KEYWORDS).forEach(([cat, words]) => {
+    words.forEach(w => _catLookup.push([w.toLowerCase(), cat]));
+  });
+  // Sort longest keyword first so "oat milk" beats "milk"
+  _catLookup.sort((a, b) => b[0].length - a[0].length);
+
+  function guessCategory(name) {
+    const lower = name.toLowerCase();
+    for (const [kw, cat] of _catLookup) {
+      if (lower.includes(kw)) return cat;
+    }
+    return null;
+  }
+
+  document.getElementById('item-input')?.addEventListener('input', e => {
+    const name = e.target.value.trim();
+    if (name.length < 2) return;
+    const guess = guessCategory(name);
+    if (!guess) return;
+    const sel = document.getElementById('category-select');
+    if (sel && [...sel.options].some(o => o.value === guess)) {
+      sel.value = guess;
+    }
+  });
   document.getElementById('login-password')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.signIn(); });
   document.getElementById('edit-item-name')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.saveEditItem(); if (e.key === 'Escape') window.closeEditModal(); });
   document.getElementById('import-url-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.importFromUrl(); if (e.key === 'Escape') window.closeUrlImportModal(); });
