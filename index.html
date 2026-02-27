@@ -246,6 +246,36 @@
 
   .btn-add:hover { opacity: 0.88; }
 
+  .dupe-warning {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: #fff8ec;
+    border: 1.5px solid #f0c060;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-top: -16px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    color: #7a5000;
+    animation: fadeIn 0.15s ease;
+  }
+  .dupe-warning-actions { display: flex; gap: 8px; }
+  .dupe-warning-actions button {
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: 1.5px solid currentColor;
+    background: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .dupe-warning-actions button:first-child { color: #7a5000; }
+  .dupe-warning-actions button:last-child { color: var(--muted); }
+
   @media (min-width: 480px) {
     .btn-add { flex: 0 0 auto; }
   }
@@ -567,6 +597,13 @@
         <select id="category-select" onchange="addItem()">
           <option value="Other">Other</option>
         </select>
+      </div>
+      <div class="dupe-warning" id="dupe-warning" style="display:none">
+        <span id="dupe-warning-text"></span>
+        <div class="dupe-warning-actions">
+          <button onclick="addItemForce()">Add anyway</button>
+          <button onclick="dismissDupeWarning()">Cancel</button>
+        </div>
       </div>
       <div class="store-filter-bar" id="store-filter-bar" style="display:none"></div>
       <div id="active-list"></div>
@@ -1330,8 +1367,23 @@
   };
 
   // ── Shopping ──
-  window.addItem = function() {
-    if (!shoppingRef) return;
+  // ── Fuzzy duplicate detection ──
+  function fuzzyMatch(a, b) {
+    a = a.toLowerCase().trim();
+    b = b.toLowerCase().trim();
+    if (a === b) return true;
+    if (a.includes(b) || b.includes(a)) return true;
+    const strip = s => s.replace(/\b(whole|semi|skimmed|full fat|low fat|free range|organic|fresh|frozen|dried|tinned|canned|raw|cooked|smoked|salted|unsalted|plain|natural|greek|extra|large|small|medium|baby|mini|chopped|sliced|diced|grated|crushed)\b/g, '').replace(/\s+/g, ' ').trim();
+    const ca = strip(a), cb = strip(b);
+    if (ca && cb && (ca === cb || ca.includes(cb) || cb.includes(ca))) return true;
+    return false;
+  }
+
+  function findDuplicate(name) {
+    return shoppingItems.find(i => fuzzyMatch(i.name, name));
+  }
+
+  function doAddItem() {
     const input = document.getElementById('item-input');
     const qtyInput = document.getElementById('qty-input');
     const sel = document.getElementById('category-select');
@@ -1343,7 +1395,28 @@
     input.value = '';
     if (qtyInput) qtyInput.value = '';
     sel.selectedIndex = 0;
+    document.getElementById('dupe-warning').style.display = 'none';
     input.focus();
+  }
+
+  window.addItem = function() {
+    if (!shoppingRef) return;
+    const input = document.getElementById('item-input');
+    const name = input.value.trim();
+    if (!name) return;
+    const dupe = findDuplicate(name);
+    if (dupe) {
+      const label = dupe.checked ? 'already checked off' : 'already on your list';
+      document.getElementById('dupe-warning-text').textContent = `"${dupe.name}" is ${label}.`;
+      document.getElementById('dupe-warning').style.display = 'flex';
+      return;
+    }
+    doAddItem();
+  };
+
+  window.addItemForce = function() { doAddItem(); };
+  window.dismissDupeWarning = function() {
+    document.getElementById('dupe-warning').style.display = 'none';
   };
 
   window.toggleCheck = function(id) {
@@ -2008,6 +2081,7 @@
 
   document.getElementById('item-input')?.addEventListener('input', e => {
     const name = e.target.value.trim();
+    if (!name) document.getElementById('dupe-warning').style.display = 'none';
     if (name.length < 2) return;
     const guess = guessCategory(name);
     if (!guess) return;
