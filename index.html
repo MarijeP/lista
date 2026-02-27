@@ -509,9 +509,13 @@
   .settings-section.open .settings-section-body { display:block; }
   .settings-section .section-desc { font-size:0.85rem; color:var(--muted); font-weight:300; margin-bottom:18px; margin-top:2px; }
   .tags-manager { display:flex; flex-direction:column; gap:10px; }
-  .tag-manager-row { display:flex; align-items:center; gap:10px; background:var(--surface); border:1.5px solid var(--border); border-radius:10px; padding:10px 14px; }
+  .tag-manager-row { display:flex; align-items:center; gap:10px; background:var(--surface); border:1.5px solid var(--border); border-radius:10px; padding:10px 14px; transition: box-shadow 0.15s, opacity 0.15s; }
   .tag-manager-row .tag-chip { pointer-events:none; }
   .tag-manager-row .tag-name { flex:1; font-size:0.92rem; font-weight:300; }
+  .drag-handle { cursor: grab; color: var(--border); font-size: 1rem; padding: 0 2px; flex-shrink:0; user-select:none; touch-action: none; }
+  .drag-handle:active { cursor: grabbing; }
+  .tag-manager-row.dragging { opacity: 0.4; box-shadow: none; }
+  .tag-manager-row.drag-over { box-shadow: 0 -3px 0 var(--accent); }
   .tag-color-swatch { width:16px; height:16px; border-radius:50%; flex-shrink:0; }
   .add-tag-form { display:flex; gap:8px; margin-top:4px; flex-wrap:wrap; }
   .add-tag-form input[type="text"] { flex:1; min-width:120px; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.9rem; background:var(--surface); color:var(--text); outline:none; transition:border-color 0.2s; }
@@ -1289,7 +1293,8 @@
       ${usingDefaults ? '<p style="font-size:0.8rem;color:var(--muted);font-style:italic;margin-bottom:12px">Using default categories — customise below to override.</p>' : ''}
       <div class="tags-manager" id="categories-manager">
         ${displayCats.map(c => `
-          <div class="tag-manager-row" id="cat-row-${escHtml(c.id)}">
+          <div class="tag-manager-row" id="cat-row-${escHtml(c.id)}" data-cat-id="${escHtml(c.id)}" draggable="true">
+            <span class="drag-handle" title="Drag to reorder">⠿</span>
             <span class="tag-name" id="cat-name-${escHtml(c.id)}">${escHtml(c.name)}</span>
             <div style="display:flex;gap:6px;align-items:center">
               <button class="btn-icon" onclick="startEditCategory('${escHtml(c.id)}','${escHtml(c.name).replace(/'/g,"\\'")}',${!!c.isDefault})" title="Edit">✎</button>
@@ -1301,6 +1306,157 @@
         <input type="text" id="new-category-input" placeholder="New category name…" maxlength="30">
         <button class="btn-add" style="padding:10px 16px;font-size:0.88rem" onclick="addCategory()">Add</button>
       </div>`;
+
+    initCategoryDrag(usingDefaults, displayCats);
+  }
+
+  function initCategoryDrag(usingDefaults, displayCats) {
+    const manager = document.getElementById('categories-manager');
+    if (!manager) return;
+    let dragSrc = null;
+
+    function saveCategoryOrder() {
+      if (!auth.currentUser) return;
+      const uid = auth.currentUser.uid;
+      const listId = settingsCategoryListId;
+      const rows = [...manager.querySelectorAll('.tag-manager-row')];
+      const updates = {};
+      rows.forEach((row, i) => {
+        const id = row.dataset.catId;
+        if (id && !id.startsWith('default_')) {
+          updates[`users/${uid}/lists/${listId}/categories/${id}/order`] = i;
+        }
+      });
+      if (Object.keys(updates).length > 0) {
+        update(ref(db), updates);
+      }
+    }
+
+    // If using defaults, materialise them first then reorder
+    async function materialiseAndReorder(newOrder) {
+      if (!auth.currentUser) return;
+      const uid = auth.currentUser.uid;
+      const listId = settingsCategoryListId;
+      const catRef = ref(db, `users/${uid}/lists/${listId}/categories`);
+      const batch = {};
+      // Build a map of name → existing id (for defaults, generate new keys)
+      newOrder.forEach((c, i) => {
+        const key = push(catRef).key;
+        batch[key] = { name: c.name, order: i };
+      });
+      await update(catRef, batch);
+    }
+
+    // ── Mouse / HTML5 drag ──
+    manager.addEventListener('dragstart', e => {
+      dragSrc = e.target.closest('.tag-manager-row');
+      if (!dragSrc) return;
+      dragSrc.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    manager.addEventListener('dragover', e => {
+      e.preventDefault();
+      const target = e.target.closest('.tag-manager-row');
+      if (!target || target === dragSrc) return;
+      manager.querySelectorAll('.tag-manager-row').forEach(r => r.classList.remove('drag-over'));
+      target.classList.add('drag-over');
+    });
+
+    manager.addEventListener('dragleave', e => {
+      const target = e.target.closest('.tag-manager-row');
+      if (target) target.classList.remove('drag-over');
+    });
+
+    manager.addEventListener('drop', e => {
+      e.preventDefault();
+      const target = e.target.closest('.tag-manager-row');
+      if (!target || target === dragSrc) return;
+      manager.querySelectorAll('.tag-manager-row').forEach(r => r.classList.remove('drag-over'));
+      // Reorder in DOM
+      const rows = [...manager.querySelectorAll('.tag-manager-row')];
+      const srcIdx = rows.indexOf(dragSrc);
+      const tgtIdx = rows.indexOf(target);
+      if (srcIdx < tgtIdx) target.after(dragSrc);
+      else target.before(dragSrc);
+      // Save
+      if (usingDefaults) {
+        const newOrder = [...manager.querySelectorAll('.tag-manager-row')].map(r => ({
+          name: r.querySelector('.tag-name').textContent
+        }));
+        materialiseAndReorder(newOrder);
+      } else {
+        saveCategoryOrder();
+      }
+    });
+
+    manager.addEventListener('dragend', () => {
+      manager.querySelectorAll('.tag-manager-row').forEach(r => {
+        r.classList.remove('dragging', 'drag-over');
+      });
+      dragSrc = null;
+    });
+
+    // ── Touch drag (mobile) ──
+    let touchDragSrc = null, touchClone = null, touchOffsetX = 0, touchOffsetY = 0;
+
+    manager.addEventListener('touchstart', e => {
+      const handle = e.target.closest('.drag-handle');
+      if (!handle) return;
+      touchDragSrc = handle.closest('.tag-manager-row');
+      if (!touchDragSrc) return;
+      const touch = e.touches[0];
+      const rect = touchDragSrc.getBoundingClientRect();
+      touchOffsetX = touch.clientX - rect.left;
+      touchOffsetY = touch.clientY - rect.top;
+      // Create floating clone
+      touchClone = touchDragSrc.cloneNode(true);
+      touchClone.style.cssText = `position:fixed;z-index:9999;width:${rect.width}px;opacity:0.85;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,0.15);border-radius:10px;left:${rect.left}px;top:${rect.top}px;`;
+      document.body.appendChild(touchClone);
+      touchDragSrc.classList.add('dragging');
+      e.preventDefault();
+    }, { passive: false });
+
+    manager.addEventListener('touchmove', e => {
+      if (!touchDragSrc || !touchClone) return;
+      const touch = e.touches[0];
+      touchClone.style.left = (touch.clientX - touchOffsetX) + 'px';
+      touchClone.style.top  = (touch.clientY - touchOffsetY) + 'px';
+      // Find row under finger
+      touchClone.style.display = 'none';
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      touchClone.style.display = '';
+      const target = el && el.closest('.tag-manager-row');
+      manager.querySelectorAll('.tag-manager-row').forEach(r => r.classList.remove('drag-over'));
+      if (target && target !== touchDragSrc) target.classList.add('drag-over');
+      e.preventDefault();
+    }, { passive: false });
+
+    manager.addEventListener('touchend', e => {
+      if (!touchDragSrc) return;
+      if (touchClone) { touchClone.remove(); touchClone = null; }
+      const touch = e.changedTouches[0];
+      touchClone && touchClone.remove();
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const target = el && el.closest('.tag-manager-row');
+      manager.querySelectorAll('.tag-manager-row').forEach(r => r.classList.remove('drag-over', 'dragging'));
+      if (target && target !== touchDragSrc) {
+        const rows = [...manager.querySelectorAll('.tag-manager-row')];
+        const srcIdx = rows.indexOf(touchDragSrc);
+        const tgtIdx = rows.indexOf(target);
+        if (srcIdx < tgtIdx) target.after(touchDragSrc);
+        else target.before(touchDragSrc);
+        if (usingDefaults) {
+          const newOrder = [...manager.querySelectorAll('.tag-manager-row')].map(r => ({
+            name: r.querySelector('.tag-name').textContent
+          }));
+          materialiseAndReorder(newOrder);
+        } else {
+          saveCategoryOrder();
+        }
+      }
+      touchDragSrc = null;
+    });
   }
 
   window.selectCategoryList = function(listId) {
