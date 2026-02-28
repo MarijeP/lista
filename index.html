@@ -1190,7 +1190,17 @@
       <div class="form-field">
         <label>Ingredients</label>
         <div class="ingredient-builder" id="ingredient-builder"></div>
-        <button class="btn-add-ingredient" onclick="addIngredientRow()">+ Add ingredient</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+          <button class="btn-add-ingredient" style="margin-top:0" onclick="addIngredientRow()">+ Add ingredient</button>
+          <button class="btn-add-ingredient" style="margin-top:0" onclick="togglePasteArea()">+ Paste list</button>
+        </div>
+        <div id="paste-area" style="display:none;margin-top:10px;">
+          <textarea id="paste-input" placeholder="Paste ingredients, one per line e.g.&#10;2.5 tablespoons olive oil&#10;1 medium yellow onion, diced&#10;2 carrots, diced" rows="6" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--surface);color:var(--text);outline:none;resize:vertical;line-height:1.6;box-sizing:border-box;"></textarea>
+          <div style="display:flex;gap:8px;margin-top:6px;">
+            <button class="btn-primary" style="width:auto;padding:9px 18px;margin-top:0" onclick="parsePasteList()">Add ingredients</button>
+            <button class="btn-secondary" style="padding:9px 18px" onclick="togglePasteArea()">Cancel</button>
+          </div>
+        </div>
       </div>
       <div class="form-field">
         <label>Method</label>
@@ -2581,6 +2591,7 @@
     document.getElementById('photo-preview').style.display = 'none';
     document.getElementById('photo-placeholder').style.display = 'block';
     document.getElementById('ingredient-builder').innerHTML = '';
+    document.getElementById('paste-area').style.display = 'none';
     addIngredientRow();
     renderTagToggles();
     showFormView();
@@ -2633,6 +2644,52 @@
     document.getElementById('recipe-form').classList.remove('active');
     if (editingRecipeId) openRecipeDetail(editingRecipeId);
     else document.getElementById('panel-recipes').classList.add('active');
+  };
+
+  window.togglePasteArea = function() {
+    const area = document.getElementById('paste-area');
+    const isHidden = area.style.display === 'none';
+    area.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+      document.getElementById('paste-input').value = '';
+      document.getElementById('paste-input').focus();
+    }
+  };
+
+  window.parsePasteList = function() {
+    const raw = document.getElementById('paste-input').value;
+    const lines = raw.split('
+').map(l => l.trim()).filter(l => l.length > 0);
+    if (!lines.length) return;
+
+    // Remove the empty placeholder row if it's the only one and both fields are empty
+    const builder = document.getElementById('ingredient-builder');
+    const existingRows = builder.querySelectorAll('.ingredient-row-input');
+    if (existingRows.length === 1) {
+      const inputs = existingRows[0].querySelectorAll('input');
+      if (!inputs[0].value.trim() && !inputs[1].value.trim()) {
+        existingRows[0].remove();
+      }
+    }
+
+    // Parse each line: leading number/fraction/unit = qty, rest = name
+    const qtyPattern = /^(\d[\d\/\.]*(\s+\d[\d\/\.]*)?(?:\s+(?:tablespoons?|tbsp|teaspoons?|tsp|cups?|oz|ounces?|lbs?|pounds?|grams?|g|kg|ml|l|litres?|liters?|cloves?|slices?|pieces?|medium|large|small|bunch|handful|pinch|can|cans|tin|tins|package|pkg|stalks?|heads?|sprigs?|sheets?))?\s*)/i;
+
+    lines.forEach(line => {
+      const match = line.match(qtyPattern);
+      let qty = '', name = line;
+      if (match && match[0].trim()) {
+        qty = match[0].trim();
+        name = line.slice(match[0].length).trim();
+        // Clean leading comma or dash
+        name = name.replace(/^[,\-]\s*/, '');
+      }
+      addIngredientRow(qty, name);
+    });
+
+    // Hide paste area and clear it
+    document.getElementById('paste-area').style.display = 'none';
+    document.getElementById('paste-input').value = '';
   };
 
   window.addIngredientRow = function(qty = '', name = '') {
