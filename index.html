@@ -585,6 +585,10 @@
 
   /* ── RECIPES LIST ── */
   .recipes-toolbar { display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; align-items:center; }
+  @media (max-width:520px) {
+    .recipe-search { width:100%; flex-basis:100%; }
+    .btn-new-recipe { margin-left:auto; }
+  }
 
   .recipes-toolbar select { padding:9px 12px; border:1.5px solid var(--border); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.88rem; background:var(--surface); color:var(--text); outline:none; cursor:pointer; }
 
@@ -720,6 +724,36 @@
   .recipe-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
   .recipe-card-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
   .recipe-card-tags .tag-chip { font-size:0.65rem; padding:2px 8px; }
+
+  /* ── Recipe toolbar search + view toggle ── */
+  .recipe-search { flex:1; min-width:140px; padding:9px 14px; border:1.5px solid var(--border); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.88rem; background:var(--surface); color:var(--text); outline:none; transition:border-color 0.2s; }
+  .recipe-search:focus { border-color:var(--accent); }
+  .view-toggle { display:flex; border:1.5px solid var(--border); border-radius:10px; overflow:hidden; }
+  .view-toggle button { background:var(--surface); border:none; padding:8px 11px; cursor:pointer; color:var(--muted); font-size:1rem; transition:background 0.15s,color 0.15s; line-height:1; }
+  .view-toggle button.active { background:var(--accent); color:#fff; }
+
+  /* ── Recipe list view ── */
+  .recipe-list { display:flex; flex-direction:column; gap:0; border:1.5px solid var(--border); border-radius:14px; overflow:hidden; }
+  .recipe-list-row { display:flex; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; background:var(--surface); }
+  .recipe-list-row:last-child { border-bottom:none; }
+  .recipe-list-row:hover { background:var(--bg); }
+  .recipe-list-thumb { width:40px; height:40px; border-radius:8px; background:var(--bg); display:flex; align-items:center; justify-content:center; font-size:1.3rem; overflow:hidden; flex-shrink:0; }
+  .recipe-list-thumb img { width:100%; height:100%; object-fit:cover; }
+  .recipe-list-info { flex:1; min-width:0; }
+  .recipe-list-name { font-weight:500; font-size:0.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .recipe-list-meta { font-size:0.75rem; color:var(--muted); font-weight:300; margin-top:1px; }
+  .recipe-list-tags { display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
+  .recipe-list-tags .tag-chip { font-size:0.62rem; padding:1px 7px; }
+  .recipe-list-tag-btn { margin-left:auto; flex-shrink:0; background:none; border:1.5px solid var(--border); border-radius:8px; padding:5px 9px; font-size:0.75rem; color:var(--muted); cursor:pointer; transition:border-color 0.15s,color 0.15s; white-space:nowrap; }
+  .recipe-list-tag-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* ── Quick-tag popover ── */
+  .quick-tag-popover { position:fixed; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.12); padding:12px; z-index:300; min-width:180px; max-width:240px; }
+  .quick-tag-popover-title { font-size:0.72rem; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .quick-tag-popover-tags { display:flex; flex-wrap:wrap; gap:6px; }
+  .quick-tag-toggle { padding:4px 10px; border-radius:20px; border:1.5px solid; font-size:0.78rem; cursor:pointer; background:transparent; transition:background 0.15s; font-family:'DM Sans',sans-serif; }
+  .quick-tag-toggle.on { background:var(--tag-color,#888)20; }
+  .quick-tag-no-tags { font-size:0.82rem; color:var(--muted); }
 
   /* Tag toggle in form */
   .tag-toggles { display:flex; flex-wrap:wrap; gap:8px; }
@@ -970,6 +1004,7 @@
         <p class="subtitle" id="recipe-count-text">Your recipe collection</p>
       </div>
       <div class="recipes-toolbar">
+        <input class="recipe-search" id="recipe-search" type="search" placeholder="Search recipes…" oninput="renderRecipes()">
         <select id="recipe-filter" onchange="renderRecipes()">
           <option value="">All categories</option>
           <option value="Breakfast">Breakfast</option>
@@ -983,10 +1018,21 @@
           <option value="Condiments">Condiments</option>
           <option value="Drinks">Drinks</option>
         </select>
+        <select id="recipe-sort" onchange="renderRecipes()">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="alpha">A–Z</option>
+        </select>
         <select id="tag-filter" onchange="renderRecipes()" style="display:none"><option value="">All tags</option></select>
+        <div class="view-toggle">
+          <button id="view-grid-btn" class="active" title="Grid view" onclick="setRecipeView('grid')">⊞</button>
+          <button id="view-list-btn" title="List view" onclick="setRecipeView('list')">☰</button>
+        </div>
         <button class="btn-new-recipe" onclick="openUrlImportModal()">+ New recipe</button>
       </div>
-      <div class="recipe-grid" id="recipe-grid"></div>
+      <div id="recipe-grid-wrap">
+        <div class="recipe-grid" id="recipe-grid"></div>
+      </div>
     </div>
   </div>
 
@@ -2483,39 +2529,152 @@
   };
 
   // ── Recipes ──
+  let recipeViewMode = 'grid';
+
+  window.setRecipeView = function(mode) {
+    recipeViewMode = mode;
+    document.getElementById('view-grid-btn').classList.toggle('active', mode === 'grid');
+    document.getElementById('view-list-btn').classList.toggle('active', mode === 'list');
+    renderRecipes();
+  };
+
   window.renderRecipes = function() {
-    const filter = document.getElementById('recipe-filter')?.value || '';
-    const tagFilter = document.getElementById('tag-filter')?.value || '';
+    const filter   = document.getElementById('recipe-filter')?.value || '';
+    const tagFilter= document.getElementById('tag-filter')?.value || '';
+    const sort     = document.getElementById('recipe-sort')?.value || 'newest';
+    const q        = (document.getElementById('recipe-search')?.value || '').toLowerCase().trim();
+
     let filtered = filter ? recipes.filter(r => r.category === filter) : [...recipes];
     if (tagFilter) filtered = filtered.filter(r => r.tags && r.tags[tagFilter]);
+    if (q) filtered = filtered.filter(r =>
+      r.name.toLowerCase().includes(q) ||
+      (r.category || '').toLowerCase().includes(q) ||
+      (r.source || '').toLowerCase().includes(q)
+    );
+
+    // Sort
+    if (sort === 'newest') filtered.sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
+    else if (sort === 'oldest') filtered.sort((a,b) => (a.createdAt||0)-(b.createdAt||0));
+    else if (sort === 'alpha') filtered.sort((a,b) => a.name.localeCompare(b.name));
+
     const countEl = document.getElementById('recipe-count-text');
     if (countEl) countEl.textContent = recipes.length === 0
       ? 'No recipes yet — add your first one!'
       : `${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}${filter ? ` in ${filter}` : ''}`;
 
-    const grid = document.getElementById('recipe-grid');
-    if (!grid) return;
+    const wrap = document.getElementById('recipe-grid-wrap');
+    if (!wrap) return;
 
     if (filtered.length === 0) {
-      grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><span>🍳</span>${filter ? 'No recipes in this category' : 'No recipes yet'}</div>`;
+      wrap.innerHTML = `<div class="empty"><span>🍳</span>${q ? 'No recipes match your search' : filter ? 'No recipes in this category' : 'No recipes yet'}</div>`;
       return;
     }
 
-    grid.innerHTML = filtered.map(r => `
-      <div class="recipe-card" onclick="openRecipeDetail('${r.id}')">
-        <div class="recipe-card-photo">
-          ${r.photo ? `<img src="${r.photo}" alt="${escHtml(r.name)}">` : categoryEmoji(r.category)}
-        </div>
-        <div class="recipe-card-body">
-          <div class="recipe-card-category">${escHtml(r.category || '')}</div>
-          <div class="recipe-card-name">${escHtml(r.name)}</div>
-          <div class="recipe-card-meta">${r.ingredients && r.ingredients.length ? r.ingredients.length + ' ingredient' + (r.ingredients.length !== 1 ? 's' : '') : 'No ingredients'}</div>
-          ${r.tags && Object.keys(r.tags).length ? `<div class="recipe-card-tags">${userTags.filter(t => r.tags && r.tags[t.id]).map(t => tagChipHtml(t, false)).join('')}</div>` : ''}
-        </div>
-      </div>`).join('');
+    if (recipeViewMode === 'list') {
+      wrap.innerHTML = `<div class="recipe-list" id="recipe-grid">${
+        filtered.map(r => `
+          <div class="recipe-list-row" onclick="openRecipeDetail('${r.id}')">
+            <div class="recipe-list-thumb">
+              ${r.photo ? `<img src="${r.photo}" alt="${escHtml(r.name)}">` : categoryEmoji(r.category)}
+            </div>
+            <div class="recipe-list-info">
+              <div class="recipe-list-name">${escHtml(r.name)}</div>
+              <div class="recipe-list-meta">${escHtml(r.category||'')}${r.ingredients&&r.ingredients.length ? ' · '+r.ingredients.length+' ingredient'+(r.ingredients.length!==1?'s':'') : ''}</div>
+              ${r.tags && Object.keys(r.tags).length ? `<div class="recipe-list-tags">${userTags.filter(t=>r.tags&&r.tags[t.id]).map(t=>tagChipHtml(t,false)).join('')}</div>` : ''}
+            </div>
+            <button class="recipe-list-tag-btn" onclick="openQuickTag(event,'${r.id}')">🏷 Tag</button>
+          </div>`).join('')
+      }</div>`;
+    } else {
+      wrap.innerHTML = `<div class="recipe-grid" id="recipe-grid">${
+        filtered.map(r => `
+          <div class="recipe-card" onclick="openRecipeDetail('${r.id}')">
+            <div class="recipe-card-photo">
+              ${r.photo ? `<img src="${r.photo}" alt="${escHtml(r.name)}">` : categoryEmoji(r.category)}
+            </div>
+            <div class="recipe-card-body">
+              <div class="recipe-card-category">${escHtml(r.category||'')}</div>
+              <div class="recipe-card-name">${escHtml(r.name)}</div>
+              <div class="recipe-card-meta">${r.ingredients&&r.ingredients.length ? r.ingredients.length+' ingredient'+(r.ingredients.length!==1?'s':'') : 'No ingredients'}</div>
+              ${r.tags && Object.keys(r.tags).length ? `<div class="recipe-card-tags">${userTags.filter(t=>r.tags&&r.tags[t.id]).map(t=>tagChipHtml(t,false)).join('')}</div>` : ''}
+              <button class="recipe-list-tag-btn" style="margin-top:8px;display:inline-block" onclick="openQuickTag(event,'${r.id}')">🏷 Tag</button>
+            </div>
+          </div>`).join('')
+      }</div>`;
+    }
   };
 
-  window.openRecipeDetail = function(id) {
+  // ── Quick-tag popover ──────────────────────────────────────────────────────
+  let _qtPopover = null;
+  function removeQuickTag() {
+    if (_qtPopover) { _qtPopover.remove(); _qtPopover = null; }
+  }
+  document.addEventListener('click', function(e) {
+    if (_qtPopover && !_qtPopover.contains(e.target)) removeQuickTag();
+  });
+
+  window.openQuickTag = function(e, recipeId) {
+    e.stopPropagation();
+    removeQuickTag();
+    const r = recipes.find(r => r.id === recipeId);
+    if (!r) return;
+
+    const pop = document.createElement('div');
+    pop.className = 'quick-tag-popover';
+    _qtPopover = pop;
+
+    if (userTags.length === 0) {
+      pop.innerHTML = `<div class="quick-tag-popover-title">Tags</div><p class="quick-tag-no-tags">No tags yet — create them in Settings.</p>`;
+    } else {
+      pop.innerHTML = `<div class="quick-tag-popover-title">Tags</div>
+        <div class="quick-tag-popover-tags">
+          ${userTags.map(t => {
+            const on = r.tags && r.tags[t.id];
+            return `<button class="quick-tag-toggle${on?' on':''}"
+              style="--tag-color:${t.color};color:${t.color};border-color:${t.color}${on?'':'60'};${on?'background:'+t.color+'20':''}"
+              onclick="toggleQuickTag(event,'${recipeId}','${t.id}')">${escHtml(t.name)}</button>`;
+          }).join('')}
+        </div>`;
+    }
+
+    // Position near the button
+    const rect = e.currentTarget.getBoundingClientRect();
+    document.body.appendChild(pop);
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let top = rect.bottom + 6, left = rect.left;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    if (top + ph > window.innerHeight - 8) top = rect.top - ph - 6;
+    pop.style.top = top + 'px';
+    pop.style.left = left + 'px';
+  };
+
+  window.toggleQuickTag = function(e, recipeId, tagId) {
+    e.stopPropagation();
+    const r = recipes.find(r => r.id === recipeId);
+    if (!r || !auth.currentUser) return;
+    const uid = auth.currentUser.uid;
+    const tagRef = ref(db, `users/${uid}/recipes/${recipeId}/tags/${tagId}`);
+    const isOn = r.tags && r.tags[tagId];
+    if (isOn) {
+      remove(tagRef);
+    } else {
+      update(ref(db, `users/${uid}/recipes/${recipeId}/tags`), {[tagId]: true});
+    }
+    // Update button state immediately
+    const btn = e.currentTarget;
+    const t = userTags.find(t => t.id === tagId);
+    if (isOn) {
+      btn.classList.remove('on');
+      btn.style.background = '';
+      btn.style.borderColor = t ? t.color+'60' : '';
+    } else {
+      btn.classList.add('on');
+      btn.style.background = t ? t.color+'20' : '';
+      btn.style.borderColor = t ? t.color : '';
+    }
+  };
+
+    window.openRecipeDetail = function(id) {
     const r = recipes.find(r => r.id === id);
     if (!r) return;
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
