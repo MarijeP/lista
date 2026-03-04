@@ -1399,7 +1399,7 @@
     updateProfile, verifyBeforeUpdateEmail, updatePassword as fbUpdatePassword,
     deleteUser, EmailAuthProvider, reauthenticateWithCredential }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import { getDatabase, ref, push, update, remove, set, get, onValue, off }
+  import { getDatabase, ref, child, push, update, remove, set, get, onValue, off }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
   const firebaseConfig = window.firebaseConfig || {};
   const isConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith('PASTE_'));
@@ -2117,12 +2117,12 @@
   window.toggleGenericCheck = function(id) {
     const item = genericItems.find(i => i.id === id);
     if (item && genericItemsRef)
-      update(ref(db, genericItemsRef.toString() + '/' + id), { checked: !item.checked });
+      update(child(genericItemsRef, id), { checked: !item.checked });
   };
 
   window.deleteGenericItem = function(id) {
     if (genericItemsRef)
-      remove(ref(db, genericItemsRef.toString() + '/' + id));
+      remove(child(genericItemsRef, id));
   };
 
   window.toggleGenericChecked = function() {
