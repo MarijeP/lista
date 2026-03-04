@@ -539,7 +539,7 @@
 
     /* Push panels up so content isn't hidden behind the nav */
     .tab-panel, .list-view, #recipe-detail, #recipe-form {
-      padding-top: 20px;
+      padding-top: 8px;
       padding-bottom: max(90px, calc(70px + env(safe-area-inset-bottom)));
     }
   }
@@ -962,7 +962,8 @@
       <div class="dupe-warning" id="dupe-warning" style="display:none">
         <span id="dupe-warning-text"></span>
         <div class="dupe-warning-actions">
-          <button onclick="addItemForce()">Add anyway</button>
+          <button onclick="addItemForce()">Add new</button>
+          <button id="dupe-uncheck-btn" onclick="uncheckDupe()" style="display:none">Uncheck it</button>
           <button onclick="dismissDupeWarning()">Cancel</button>
         </div>
       </div>
@@ -1207,9 +1208,9 @@
       <div class="form-field">
         <label>Category</label>
         <select id="rf-category">
-          <option value="Dinner">Dinner</option>
           <option value="Breakfast">Breakfast</option>
           <option value="Lunch">Lunch</option>
+          <option value="Dinner">Dinner</option>
           <option value="Baking">Baking</option>
           <option value="Soups">Soups</option>
           <option value="Salads">Salads</option>
@@ -2317,8 +2318,14 @@
     }
     const dupe = findDuplicate(name);
     if (dupe) {
-      const label = dupe.checked ? 'already checked off' : 'already on your list';
+      const label = dupe.checked ? 'already on your list (checked off)' : 'already on your list';
       document.getElementById('dupe-warning-text').textContent = `"${dupe.name}" is ${label}.`;
+      const uncheckBtn = document.getElementById('dupe-uncheck-btn');
+      if (uncheckBtn) {
+        uncheckBtn.style.display = dupe.checked ? '' : 'none';
+        uncheckBtn.dataset.id = dupe.id;
+      }
+      window._dupeItem = dupe;
       document.getElementById('dupe-warning').style.display = 'flex';
       return;
     }
@@ -2328,6 +2335,18 @@
   window.addItemForce = function() { doAddItem(); };
   window.dismissDupeWarning = function() {
     document.getElementById('dupe-warning').style.display = 'none';
+    window._dupeItem = null;
+  };
+
+  window.uncheckDupe = function() {
+    const item = window._dupeItem;
+    if (item && db && auth.currentUser) {
+      update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${item.id}`), { checked: false });
+      showToast(`"${item.name}" unchecked`);
+    }
+    document.getElementById('dupe-warning').style.display = 'none';
+    document.getElementById('item-input').value = '';
+    window._dupeItem = null;
   };
 
   window.toggleCheck = function(id) {
