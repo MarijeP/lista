@@ -2091,7 +2091,6 @@
     return `<li class="item${isChecked?' checked':''}">
       <input type="checkbox" class="item-check"${isChecked?' checked':''} onchange="toggleGenericCheck('${item.id}')">
       <span class="item-name" onclick="openEditGenericItem('${item.id}')" style="cursor:pointer">${escHtml(item.name)}</span>
-      ${item.category ? `<span class="item-category-badge">${escHtml(item.category)}</span>` : ''}
       <button class="btn-icon" onclick="deleteGenericItem('${item.id}')" title="Remove">✕</button>
     </li>`;
   }
