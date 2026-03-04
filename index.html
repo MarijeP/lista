@@ -1426,11 +1426,6 @@
       if (user) {
         showApp();
         connectData(user.uid);
-        // Write to email index so others can find this user by email
-        if (user.email) {
-          const emailKey = user.email.replace(/\./g, ',').replace(/@/g, '_at_');
-          set(ref(db, `emailIndex/${emailKey}`), user.uid);
-        }
       }
       else { showLogin(); disconnectData(); }
     });
@@ -1447,6 +1442,13 @@
   }
 
   function connectData(uid) {
+    // Write email index so others can find this user — runs on every app load
+    const user = auth.currentUser;
+    if (user && user.email) {
+      const emailKey = user.email.replace(/\./g, ',').replace(/@/g, '_at_');
+      set(ref(db, `emailIndex/${emailKey}`), uid);
+    }
+
     disconnectData();
 
     // Lists index
