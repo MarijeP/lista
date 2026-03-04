@@ -798,6 +798,28 @@
 
   /* ── LISTS HOME ── */
   .lists-grid { display:flex; flex-direction:column; gap:12px; }
+  /* ── Share button on list card ── */
+  .list-card-share-btn { background:none; border:none; font-size:1.1rem; cursor:pointer; padding:6px; border-radius:8px; opacity:0.5; transition:opacity 0.15s; flex-shrink:0; line-height:1; }
+  .list-card-share-btn:hover { opacity:1; }
+  .list-card-shared { border-color: var(--accent); }
+  .shared-badge { display:inline-block; font-size:0.68rem; font-weight:500; background:var(--accent)18; color:var(--accent); border:1px solid var(--accent)40; border-radius:20px; padding:1px 7px; vertical-align:middle; margin-left:6px; }
+
+  /* ── Share modal ── */
+  .share-modal { background:var(--surface); border-radius:16px; padding:28px 24px 24px; width:100%; max-width:420px; box-shadow:0 8px 40px rgba(0,0,0,0.12); transform:translateY(12px); transition:transform 0.2s; }
+  .modal-overlay.open .share-modal { transform:translateY(0); }
+  .share-modal h3 { font-family:'Poppins',sans-serif; font-size:1.2rem; font-weight:600; margin-bottom:4px; }
+  .share-modal-subtitle { font-size:0.82rem; color:var(--muted); margin-bottom:20px; font-weight:300; }
+  .share-invite-row { display:flex; gap:8px; margin-bottom:6px; }
+  .share-invite-row input { flex:1; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.9rem; background:var(--bg); color:var(--text); outline:none; transition:border-color 0.2s; }
+  .share-invite-row input:focus { border-color:var(--accent); }
+  .share-error { font-size:0.8rem; color:var(--danger,#e05252); min-height:18px; margin-bottom:12px; }
+  .share-section-title { font-size:0.72rem; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .collaborator-row { display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border); }
+  .collaborator-row:last-child { border-bottom:none; }
+  .collaborator-email { font-size:0.88rem; }
+  .btn-revoke { background:none; border:1.5px solid var(--border); border-radius:8px; padding:4px 10px; font-size:0.78rem; color:var(--muted); cursor:pointer; font-family:'DM Sans',sans-serif; transition:border-color 0.15s,color 0.15s; }
+  .btn-revoke:hover { border-color:var(--danger,#e05252); color:var(--danger,#e05252); }
+
   .list-card { background:var(--surface); border:1.5px solid var(--border); border-radius:14px; padding:18px 20px; cursor:pointer; transition:border-color 0.2s, box-shadow 0.2s; display:flex; align-items:center; gap:16px; }
   .list-card:hover { border-color:var(--accent); box-shadow:0 2px 12px rgba(0,0,0,0.06); }
   .list-card-icon { font-size:1.6rem; flex-shrink:0; }
@@ -1331,6 +1353,24 @@
     <button class="btn-import-manual" onclick="closeUrlImportModal(); openNewRecipeForm()">Or enter recipe manually →</button>
   </div>
 </div>
+<!-- Share list modal -->
+<div class="modal-overlay" id="share-modal" onclick="closeShareModal()">
+  <div class="share-modal" onclick="event.stopPropagation()">
+    <h3>Share "<span id="share-modal-list-name"></span>"</h3>
+    <p class="share-modal-subtitle">Invite someone by their Lista account email. They'll be able to add and check off items.</p>
+    <div class="share-invite-row">
+      <input type="email" id="share-invite-input" placeholder="their@email.com" autocomplete="off">
+      <button class="btn-primary" id="share-invite-btn" style="width:auto;padding:10px 16px;margin-top:0" onclick="inviteCollaborator()">Invite</button>
+    </div>
+    <p class="share-error" id="share-invite-error"></p>
+    <p class="share-section-title">People with access</p>
+    <div id="share-collaborators"></div>
+    <div style="margin-top:20px">
+      <button class="btn-secondary" onclick="closeShareModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <footer class="footer"><span class="footer-name">Lista</span></footer>
 
@@ -1358,7 +1398,7 @@
     updateProfile, verifyBeforeUpdateEmail, updatePassword as fbUpdatePassword,
     deleteUser, EmailAuthProvider, reauthenticateWithCredential }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import { getDatabase, ref, push, update, remove, onValue, off }
+  import { getDatabase, ref, push, update, remove, set, get, onValue, off }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
   const firebaseConfig = window.firebaseConfig || {};
   const isConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith('PASTE_'));
@@ -1368,9 +1408,9 @@
   const auth = isConfigured ? getAuth(app) : null;
   const db = isConfigured ? getDatabase(app) : null;
 
-  let shoppingItems = [], recipes = [], userTags = [], userStores = [], userLists = [];
-  let shoppingRef = null, recipesRef = null, tagsRef = null, storesRef = null, listsRef = null;
-  let activeStoreFilter = '', activeListId = null, activeListType = null;
+  let shoppingItems = [], recipes = [], userTags = [], userStores = [], userLists = [], sharedLists = [];
+  let shoppingRef = null, recipesRef = null, tagsRef = null, storesRef = null, listsRef = null, sharedListsRef = null;
+  let activeStoreFilter = '', activeListId = null, activeListType = null, activeSharedOwnerUid = null;
   let genericItemsRef = null, genericItems = [];
   let newListType = 'shopping';
   let listCategories = {}; // { listId: [{id, name}] }
@@ -1382,7 +1422,15 @@
 
   if (auth) {
     onAuthStateChanged(auth, user => {
-      if (user) { showApp(); connectData(user.uid); }
+      if (user) {
+        showApp();
+        connectData(user.uid);
+        // Write to email index so others can find this user by email
+        if (user.email) {
+          const emailKey = user.email.replace(/\./g, ',').replace(/@/g, '_at_');
+          set(ref(db, `emailIndex/${emailKey}`), user.uid);
+        }
+      }
       else { showLogin(); disconnectData(); }
     });
   }
@@ -1437,6 +1485,14 @@
       renderShopping();
     }, () => setSyncStatus('error', 'Connection error'));
 
+    // Listen for lists shared with this user
+    sharedListsRef = ref(db, `users/${uid}/sharedLists`);
+    onValue(sharedListsRef, snap => {
+      const d = snap.val();
+      sharedLists = d ? Object.entries(d).map(([id,v]) => ({id,...v})) : [];
+      renderListsHome();
+    });
+
     recipesRef = ref(db, `users/${uid}/recipes`);
     onValue(recipesRef, snap => {
       const d = snap.val();
@@ -1476,8 +1532,9 @@
     if (tagsRef) { off(tagsRef); tagsRef = null; }
     if (storesRef) { off(storesRef); storesRef = null; }
     if (listsRef) { off(listsRef); listsRef = null; }
+    if (sharedListsRef) { off(sharedListsRef); sharedListsRef = null; }
     if (genericItemsRef) { off(genericItemsRef); genericItemsRef = null; }
-    shoppingItems = []; recipes = []; userTags = []; userStores = []; userLists = []; genericItems = [];
+    shoppingItems = []; recipes = []; userTags = []; userStores = []; userLists = []; sharedLists = []; genericItems = [];
     listCategories = {}; settingsCategoryListId = null;
     activeStoreFilter = ''; activeListId = null; activeListType = null;
   }
@@ -1765,23 +1822,43 @@
     const grid = document.getElementById('lists-grid');
     const sub = document.getElementById('lists-subtitle');
     if (!grid) return;
-    if (sub) sub.textContent = userLists.length === 1 ? '1 list' : `${userLists.length} lists`;
-    if (userLists.length === 0) {
+    const totalLists = userLists.length + sharedLists.length;
+    if (sub) sub.textContent = totalLists === 1 ? '1 list' : `${totalLists} lists`;
+
+    if (totalLists === 0) {
       grid.innerHTML = '<p style="color:var(--muted);font-size:0.88rem;font-weight:300;margin-bottom:16px">No lists yet — create your first one!</p>';
       return;
     }
-    grid.innerHTML = userLists.map(list => {
+
+    const ownedHtml = userLists.map(list => {
       const icon = list.type === 'shopping' ? '🛒' : '📝';
-      const meta = list.type === 'shopping' ? 'Shopping list' : 'Generic list';
+      const sharedWith = list.sharedWith ? Object.keys(list.sharedWith).length : 0;
+      const meta = (list.type === 'shopping' ? 'Shopping list' : 'Generic list') +
+        (sharedWith ? ` · 👥 Shared with ${sharedWith}` : '');
       return `<div class="list-card" onclick="openList('${list.id}')">
         <span class="list-card-icon">${icon}</span>
         <div class="list-card-body">
           <div class="list-card-name">${escHtml(list.name)}</div>
           <div class="list-card-meta">${meta}</div>
         </div>
+        <button class="list-card-share-btn" onclick="openShareModal(event,'${list.id}')" title="Share list">👥</button>
         <span class="list-card-arrow">›</span>
       </div>`;
     }).join('');
+
+    const sharedHtml = sharedLists.map(sl => {
+      const icon = sl.listType === 'shopping' ? '🛒' : '📝';
+      return `<div class="list-card list-card-shared" onclick="openSharedList('${sl.id}')">
+        <span class="list-card-icon">${icon}</span>
+        <div class="list-card-body">
+          <div class="list-card-name">${escHtml(sl.listName)} <span class="shared-badge">👥 Shared</span></div>
+          <div class="list-card-meta">Shared by ${escHtml(sl.ownerEmail || 'someone')}</div>
+        </div>
+        <span class="list-card-arrow">›</span>
+      </div>`;
+    }).join('');
+
+    grid.innerHTML = ownedHtml + sharedHtml;
   }
 
   window.openList = function(listId) {
@@ -1809,6 +1886,18 @@
   window.backToLists = function() {
     // Disconnect generic list if open
     if (genericItemsRef) { off(genericItemsRef); genericItemsRef = null; genericItems = []; }
+    // If we were viewing a shared list, reconnect own shoppingRef
+    if (activeSharedOwnerUid && auth.currentUser) {
+      const uid = auth.currentUser.uid;
+      if (shoppingRef) off(shoppingRef);
+      shoppingRef = ref(db, `users/${uid}/shoppingList`);
+      onValue(shoppingRef, snap => {
+        const d = snap.val();
+        shoppingItems = d ? Object.entries(d).map(([id,v]) => ({id,...v})) : [];
+        renderShopping();
+      });
+    }
+    activeSharedOwnerUid = null;
     activeListId = null; activeListType = null;
     document.getElementById('list-view-shopping').style.display = 'none';
     document.getElementById('list-view-generic').style.display = 'none';
@@ -1816,6 +1905,147 @@
     document.getElementById('panel-lists').classList.add('active');
     document.getElementById('tab-lists').classList.add('active');
   };
+
+  // Open a list shared with this user (owned by someone else)
+  window.openSharedList = function(sharedListEntryId) {
+    const sl = sharedLists.find(s => s.id === sharedListEntryId);
+    if (!sl) return;
+    activeListId = sl.listId;
+    activeListType = sl.listType;
+    activeSharedOwnerUid = sl.ownerUid;
+
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('list-view-shopping').style.display = 'none';
+    document.getElementById('list-view-generic').style.display = 'none';
+
+    if (sl.listType === 'shopping') {
+      // Point shoppingRef to owner's shoppingList
+      if (shoppingRef) off(shoppingRef);
+      shoppingRef = ref(db, `users/${sl.ownerUid}/shoppingList`);
+      onValue(shoppingRef, snap => {
+        const d = snap.val();
+        shoppingItems = d ? Object.entries(d).map(([id,v]) => ({id,...v})) : [];
+        renderShopping();
+      });
+      document.getElementById('shopping-list-title').textContent = sl.listName;
+      document.getElementById('list-view-shopping').style.display = 'block';
+      renderCategorySelects();
+    } else {
+      document.getElementById('generic-list-title').textContent = sl.listName;
+      document.getElementById('list-view-generic').style.display = 'block';
+      connectGenericListShared(sl.ownerUid, sl.listId);
+    }
+  };
+
+  // ── Share modal ──────────────────────────────────────────────────────────────
+  window.openShareModal = function(e, listId) {
+    e.stopPropagation();
+    const list = userLists.find(l => l.id === listId);
+    if (!list) return;
+    document.getElementById('share-modal-list-name').textContent = list.name;
+    document.getElementById('share-invite-input').value = '';
+    document.getElementById('share-invite-error').textContent = '';
+    renderShareCollaborators(list);
+    document.getElementById('share-modal').dataset.listId = listId;
+    document.getElementById('share-modal').classList.add('open');
+  };
+
+  window.closeShareModal = function() {
+    document.getElementById('share-modal').classList.remove('open');
+  };
+
+  function renderShareCollaborators(list) {
+    const container = document.getElementById('share-collaborators');
+    const collaborators = list.sharedWith ? Object.entries(list.sharedWith) : [];
+    if (collaborators.length === 0) {
+      container.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;font-weight:300">No one else has access yet.</p>';
+      return;
+    }
+    container.innerHTML = collaborators.map(([uid, info]) => `
+      <div class="collaborator-row">
+        <span class="collaborator-email">${escHtml(info.email)}</span>
+        <button class="btn-revoke" onclick="revokeAccess('${list.id}','${uid}','${escHtml(info.email)}')">Remove</button>
+      </div>`).join('');
+  }
+
+  window.inviteCollaborator = async function() {
+    const listId = document.getElementById('share-modal').dataset.listId;
+    const email = document.getElementById('share-invite-input').value.trim().toLowerCase();
+    const errEl = document.getElementById('share-invite-error');
+    errEl.textContent = '';
+
+    if (!email) { errEl.textContent = 'Please enter an email address.'; return; }
+    if (!auth.currentUser) return;
+
+    const emailKey = email.replace(/\./g, ',').replace(/@/g, '_at_');
+    const btn = document.getElementById('share-invite-btn');
+    btn.textContent = 'Inviting…'; btn.disabled = true;
+
+    try {
+      const snap = await get(ref(db, `emailIndex/${emailKey}`));
+      if (!snap.exists()) {
+        errEl.textContent = 'No Lista account found for that email.';
+        btn.textContent = 'Invite'; btn.disabled = false;
+        return;
+      }
+      const inviteeUid = snap.val();
+      if (inviteeUid === auth.currentUser.uid) {
+        errEl.textContent = "That's you!";
+        btn.textContent = 'Invite'; btn.disabled = false;
+        return;
+      }
+
+      const list = userLists.find(l => l.id === listId);
+      if (list && list.sharedWith && list.sharedWith[inviteeUid]) {
+        errEl.textContent = 'This person already has access.';
+        btn.textContent = 'Invite'; btn.disabled = false;
+        return;
+      }
+
+      const ownerUid = auth.currentUser.uid;
+      const ownerEmail = auth.currentUser.email;
+
+      // Write to owner's list sharedWith
+      await update(ref(db, `users/${ownerUid}/lists/${listId}/sharedWith/${inviteeUid}`), {
+        email, uid: inviteeUid
+      });
+
+      // Write to invitee's sharedLists
+      await set(ref(db, `users/${inviteeUid}/sharedLists/${listId}`), {
+        listId,
+        listName: list ? list.name : 'Shared list',
+        listType: list ? list.type : 'shopping',
+        ownerUid,
+        ownerEmail
+      });
+
+      document.getElementById('share-invite-input').value = '';
+      showToast(`Invited ${email}`);
+      btn.textContent = 'Invite'; btn.disabled = false;
+
+    } catch(err) {
+      errEl.textContent = 'Something went wrong. Please try again.';
+      btn.textContent = 'Invite'; btn.disabled = false;
+    }
+  };
+
+  window.revokeAccess = async function(listId, inviteeUid, email) {
+    if (!auth.currentUser) return;
+    const ownerUid = auth.currentUser.uid;
+    await remove(ref(db, `users/${ownerUid}/lists/${listId}/sharedWith/${inviteeUid}`));
+    await remove(ref(db, `users/${inviteeUid}/sharedLists/${listId}`));
+    showToast(`Removed ${email}`);
+  };
+
+  function connectGenericListShared(ownerUid, listId) {
+    if (genericItemsRef) { off(genericItemsRef); genericItemsRef = null; }
+    genericItemsRef = ref(db, `users/${ownerUid}/genericLists/${listId}`);
+    onValue(genericItemsRef, snap => {
+      const d = snap.val();
+      genericItems = d ? Object.entries(d).map(([id,v]) => ({id,...v})) : [];
+      renderGenericList();
+    });
+  }
 
   function connectGenericList(listId) {
     if (genericItemsRef) { off(genericItemsRef); genericItemsRef = null; }
@@ -3177,6 +3407,7 @@
   document.getElementById('import-url-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.importFromUrl(); if (e.key === 'Escape') window.closeUrlImportModal(); });
   document.getElementById('generic-item-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addGenericItem(); });
   document.getElementById('new-store-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addStore(); });
+  document.getElementById('share-invite-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.inviteCollaborator(); });
   document.getElementById('new-store-shortcut')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addStore(); });
   document.getElementById('new-list-name')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.createNewList(); if (e.key === 'Escape') window.closeNewListModal(); });
 
