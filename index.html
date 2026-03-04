@@ -2087,10 +2087,14 @@
     const toggleBtn = document.getElementById('generic-checked-toggle');
     const checkedEl = document.getElementById('generic-checked-section');
     if (checked.length === 0) {
-      toggleBtn.style.display = 'none'; checkedEl.innerHTML = '';
+      toggleBtn.style.display = 'none';
+      checkedEl.innerHTML = '';
+      checkedEl.classList.remove('visible');
+      toggleBtn.classList.remove('open');
     } else {
       toggleBtn.style.display = 'flex';
       document.getElementById('generic-checked-label').textContent = `🗂 Checked off items (${checked.length})`;
+      // Only populate innerHTML, don't change visibility — preserve open/closed state
       checkedEl.innerHTML = '<ul class="items-list">' +
         checked.map(item => `
           <li class="item checked">
