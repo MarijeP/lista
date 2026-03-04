@@ -1017,6 +1017,7 @@
       </div>
       <div class="add-form">
         <input type="text" id="generic-item-input" placeholder="Add an item…" autocomplete="off">
+        <select id="generic-item-category" style="display:none"></select>
         <button class="btn-add" onclick="addGenericItem()">Add</button>
       </div>
       <div id="generic-active-list"></div>
@@ -1472,14 +1473,17 @@
       }
       renderListsHome();
       renderSettingsCategoriesSection();
-      // Subscribe to categories for each shopping list
-      userLists.filter(l => l.type === 'shopping').forEach(list => {
+      // Subscribe to categories for all lists
+      userLists.forEach(list => {
         if (!listCategories[list.id]) {
           const catRef = ref(db, `users/${uid}/lists/${list.id}/categories`);
           onValue(catRef, csnap => {
             const cd = csnap.val();
             listCategories[list.id] = cd ? Object.entries(cd).map(([id,v]) => ({id,...v})).sort((a,b) => (a.order||0)-(b.order||0)) : null;
-            if (activeListId === list.id) renderCategorySelects();
+            if (activeListId === list.id) {
+              renderCategorySelects();
+              if (list.type === 'generic') renderGenericCategorySelect(list.id);
+            }
             renderSettingsCategoriesSection();
           });
         }
@@ -2072,12 +2076,21 @@
     const toggleBtn = document.getElementById('generic-checked-toggle');
     if (checkedEl) { checkedEl.classList.remove('visible'); checkedEl.innerHTML = ''; }
     if (toggleBtn) { toggleBtn.classList.remove('open'); toggleBtn.style.display = 'none'; }
+    renderGenericCategorySelect(listId);
     genericItemsRef = ref(db, `users/${auth.currentUser.uid}/genericLists/${listId}`);
     onValue(genericItemsRef, snap => {
       const d = snap.val();
       genericItems = d ? Object.entries(d).map(([id,v]) => ({id,...v})) : [];
       renderGenericList();
     });
+  }
+
+  function genericItemHtml(item, isChecked) {
+    return `<li class="item${isChecked?' checked':''}">
+      <input type="checkbox" class="item-check"${isChecked?' checked':''} onchange="toggleGenericCheck('${item.id}')">
+      <span class="item-name">${escHtml(item.name)}</span>
+      <button class="btn-icon" onclick="deleteGenericItem('${item.id}')" title="Remove">✕</button>
+    </li>`;
   }
 
   function renderGenericList() {
@@ -2092,13 +2105,31 @@
         ? '<div class="empty"><span>📝</span>List is empty</div>'
         : '<div class="empty"><span>✅</span>All done!</div>';
     } else {
-      activeEl.innerHTML = '<ul class="items-list">' +
-        active.map(item => `
-          <li class="item">
-            <input type="checkbox" class="item-check" onchange="toggleGenericCheck('${item.id}')">
-            <span class="item-name">${escHtml(item.name)}</span>
-            <button class="btn-icon" onclick="deleteGenericItem('${item.id}')" title="Remove">✕</button>
-          </li>`).join('') + '</ul>';
+      // Group by category if any items have one
+      const hasCats = active.some(i => i.category);
+      if (hasCats) {
+        const cats = getCategoriesForList(activeListId);
+        const catOrder = cats.length ? cats : [...new Set(active.map(i => i.category).filter(Boolean))];
+        const uncategorised = active.filter(i => !i.category);
+        let html = '';
+        catOrder.forEach(cat => {
+          const items = active.filter(i => i.category === cat);
+          if (!items.length) return;
+          html += `<div class="category-block">
+            <div class="category-label">${escHtml(cat)}</div>
+            <ul class="items-list">${items.map(i => genericItemHtml(i, false)).join('')}</ul>
+          </div>`;
+        });
+        if (uncategorised.length) {
+          html += `<div class="category-block">
+            <div class="category-label">Other</div>
+            <ul class="items-list">${uncategorised.map(i => genericItemHtml(i, false)).join('')}</ul>
+          </div>`;
+        }
+        activeEl.innerHTML = html;
+      } else {
+        activeEl.innerHTML = '<ul class="items-list">' + active.map(i => genericItemHtml(i, false)).join('') + '</ul>';
+      }
     }
 
     const toggleBtn = document.getElementById('generic-checked-toggle');
@@ -2111,22 +2142,30 @@
     } else {
       toggleBtn.style.display = 'flex';
       document.getElementById('generic-checked-label').textContent = `🗂 Checked off items (${checked.length})`;
-      // Only populate innerHTML, don't change visibility — preserve open/closed state
-      checkedEl.innerHTML = '<ul class="items-list">' +
-        checked.map(item => `
-          <li class="item checked">
-            <input type="checkbox" class="item-check" checked onchange="toggleGenericCheck('${item.id}')">
-            <span class="item-name">${escHtml(item.name)}</span>
-            <button class="btn-icon" onclick="deleteGenericItem('${item.id}')" title="Remove">✕</button>
-          </li>`).join('') + '</ul>';
+      checkedEl.innerHTML = '<ul class="items-list">' + checked.map(i => genericItemHtml(i, true)).join('') + '</ul>';
     }
   }
+
+  window.renderGenericCategorySelect = function renderGenericCategorySelect(listId) {
+    const sel = document.getElementById('generic-item-category');
+    if (!sel) return;
+    const cats = getCategoriesForList(listId);
+    if (cats.length === 0) {
+      sel.style.display = 'none';
+      return;
+    }
+    sel.style.display = '';
+    const cur = sel.value;
+    sel.innerHTML = cats.map(c => `<option value="${escHtml(c)}"${c===cur?' selected':''}>${escHtml(c)}</option>`).join('');
+  };
 
   window.addGenericItem = function() {
     const input = document.getElementById('generic-item-input');
     const name = input.value.trim();
     if (!name || !genericItemsRef) return;
-    push(genericItemsRef, { name, checked: false });
+    const catSel = document.getElementById('generic-item-category');
+    const category = catSel && catSel.style.display !== 'none' ? catSel.value : '';
+    push(genericItemsRef, { name, category, checked: false });
     input.value = '';
     input.focus();
   };
@@ -2218,27 +2257,28 @@
   const renderSettingsCategoriesSection = window.renderSettingsCategoriesSection = function() {
     const container = document.getElementById('settings-categories-section');
     if (!container) return;
-    const shoppingLists = userLists.filter(l => l.type === 'shopping');
-    if (shoppingLists.length === 0) {
-      container.innerHTML = '<p style="color:var(--muted);font-size:0.88rem;font-weight:300">No shopping lists yet.</p>';
+    const allLists = userLists;
+    if (allLists.length === 0) {
+      container.innerHTML = '<p style="color:var(--muted);font-size:0.88rem;font-weight:300">No lists yet.</p>';
       return;
     }
-    // Default to first shopping list if none selected
-    if (!settingsCategoryListId || !shoppingLists.find(l => l.id === settingsCategoryListId)) {
-      settingsCategoryListId = shoppingLists[0].id;
+    // Default to first list if none selected
+    if (!settingsCategoryListId || !allLists.find(l => l.id === settingsCategoryListId)) {
+      settingsCategoryListId = allLists[0].id;
     }
+    const selectedList = allLists.find(l => l.id === settingsCategoryListId);
     const cats = listCategories[settingsCategoryListId] || [];
-    const usingDefaults = cats.length === 0;
+    const usingDefaults = cats.length === 0 && selectedList && selectedList.type === 'shopping';
     const displayCats = usingDefaults ? DEFAULT_CATEGORIES.map((n,i) => ({id:'default_'+i, name:n, isDefault:true})) : cats;
 
     container.innerHTML = `
-      ${shoppingLists.length > 1 ? `
+      ${allLists.length > 1 ? `
         <div style="margin-bottom:16px">
           <label style="font-size:0.82rem;font-weight:500;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;display:block;margin-bottom:6px">List</label>
           <select id="settings-cat-list-select" onchange="selectCategoryList(this.value)" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg);font-family:inherit;font-size:0.92rem">
-            ${shoppingLists.map(l => `<option value="${l.id}"${l.id===settingsCategoryListId?' selected':''}>${escHtml(l.name)}</option>`).join('')}
+            ${allLists.map(l => `<option value="${l.id}"${l.id===settingsCategoryListId?' selected':''}>${escHtml(l.name)}</option>`).join('')}
           </select>
-        </div>` : `<p style="font-size:0.88rem;color:var(--muted);margin-bottom:12px">For: <strong>${escHtml(shoppingLists[0].name)}</strong></p>`}
+        </div>` : `<p style="font-size:0.88rem;color:var(--muted);margin-bottom:12px">For: <strong>${escHtml(allLists[0].name)}</strong></p>`}
       ${usingDefaults ? '<p style="font-size:0.8rem;color:var(--muted);font-style:italic;margin-bottom:12px">Using default categories — customise below to override.</p>' : ''}
       <div class="tags-manager" id="categories-manager">
         ${displayCats.map(c => `
