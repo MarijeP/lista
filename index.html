@@ -749,11 +749,8 @@
   .recipe-list-tag-btn { margin-left:auto; flex-shrink:0; background:none; border:1.5px solid var(--border); border-radius:8px; padding:5px 9px; font-size:0.75rem; color:var(--muted); cursor:pointer; transition:border-color 0.15s,color 0.15s; white-space:nowrap; }
   .recipe-list-tag-btn:hover { border-color:var(--accent); color:var(--accent); }
 
-  /* ── Generic item category label ── */
-  .generic-item-cat { font-size:0.72rem; padding:2px 8px; border-radius:20px; border:1.5px solid var(--accent)50; color:var(--accent); background:var(--accent)10; cursor:pointer; white-space:nowrap; transition:background 0.15s; flex-shrink:0; }
-  .generic-item-cat:hover { background:var(--accent)20; }
-  .generic-item-cat.empty { border-style:dashed; color:var(--muted); background:none; border-color:var(--border); }
-  .generic-item-cat.empty:hover { border-color:var(--accent); color:var(--accent); }
+  /* ── Generic item category badge ── */
+  .item-category-badge { font-size:0.7rem; padding:2px 7px; border-radius:20px; background:var(--accent)12; color:var(--accent); border:1px solid var(--accent)30; white-space:nowrap; flex-shrink:0; }
 
   /* ── Quick-tag popover ── */
   .quick-tag-popover { position:fixed; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.12); padding:12px; z-index:300; min-width:180px; max-width:240px; }
@@ -1332,23 +1329,27 @@
 <div class="modal-overlay" id="edit-modal" onclick="closeEditModal(event)">
   <div class="modal">
     <h3>Edit item</h3>
-    <div class="form-field">
-      <label>Quantity</label>
-      <input type="text" id="edit-item-qty" placeholder="e.g. 2, 500g, 1 bunch">
+    <div id="edit-shopping-fields">
+      <div class="form-field">
+        <label>Quantity</label>
+        <input type="text" id="edit-item-qty" placeholder="e.g. 2, 500g, 1 bunch">
+      </div>
     </div>
     <div class="form-field">
       <label>Item name</label>
       <input type="text" id="edit-item-name" placeholder="Item name">
     </div>
-    <div class="form-field">
+    <div class="form-field" id="edit-category-field" style="display:none">
       <label>Category</label>
       <select id="edit-item-category">
-        <option value="Other">Other</option>
+        <option value="">No category</option>
       </select>
     </div>
-    <div class="form-field">
-      <label>Store</label>
-      <select id="edit-item-store"><option value="">Any store</option></select>
+    <div id="edit-shopping-fields-2">
+      <div class="form-field">
+        <label>Store</label>
+        <select id="edit-item-store"><option value="">Any store</option></select>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-primary" onclick="saveEditItem()">Save</button>
@@ -2087,14 +2088,10 @@
   }
 
   function genericItemHtml(item, isChecked) {
-    const hasCats = getCategoriesForList(activeListId).length > 0;
-    const catLabel = item.category
-      ? `<span class="generic-item-cat" onclick="openGenericCatPopover(event,'${item.id}')">${escHtml(item.category)}</span>`
-      : (hasCats ? `<span class="generic-item-cat empty" onclick="openGenericCatPopover(event,'${item.id}')">+ category</span>` : '');
     return `<li class="item${isChecked?' checked':''}">
       <input type="checkbox" class="item-check"${isChecked?' checked':''} onchange="toggleGenericCheck('${item.id}')">
-      <span class="item-name">${escHtml(item.name)}</span>
-      ${catLabel}
+      <span class="item-name" onclick="openEditGenericItem('${item.id}')" style="cursor:pointer">${escHtml(item.name)}</span>
+      ${item.category ? `<span class="item-category-badge">${escHtml(item.category)}</span>` : ''}
       <button class="btn-icon" onclick="deleteGenericItem('${item.id}')" title="Remove">✕</button>
     </li>`;
   }
@@ -2161,55 +2158,6 @@
     push(genericItemsRef, { name, category: '', checked: false });
     input.value = '';
     input.focus();
-  };
-
-  // ── Generic item category popover ──────────────────────────────────────────
-  let _gcatPopover = null;
-  function removeGenericCatPopover() {
-    if (_gcatPopover) { _gcatPopover.remove(); _gcatPopover = null; }
-  }
-  document.addEventListener('click', function(e) {
-    if (_gcatPopover && !_gcatPopover.contains(e.target)) removeGenericCatPopover();
-  });
-
-  window.openGenericCatPopover = function(e, itemId) {
-    e.stopPropagation();
-    removeGenericCatPopover();
-    const cats = getCategoriesForList(activeListId);
-    if (!cats.length) return;
-
-    const item = genericItems.find(i => i.id === itemId);
-    const pop = document.createElement('div');
-    pop.className = 'quick-tag-popover';
-    _gcatPopover = pop;
-
-    pop.innerHTML = `<div class="quick-tag-popover-title">Category</div>
-      <div class="quick-tag-popover-tags">
-        ${item && item.category ? `<button class="quick-tag-toggle on" style="--tag-color:var(--muted);color:var(--muted);border-color:var(--muted);background:var(--muted)10" onclick="setGenericItemCategory(event,'${itemId}','')">✕ None</button>` : ''}
-        ${cats.map(cat => {
-          const active = item && item.category === cat;
-          return `<button class="quick-tag-toggle${active?' on':''}"
-            style="color:var(--accent);border-color:var(--accent)${active?'':'60'};${active?'background:var(--accent)15':''}"
-            onclick="setGenericItemCategory(event,'${itemId}','${escHtml(cat)}')">${escHtml(cat)}</button>`;
-        }).join('')}
-      </div>`;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    document.body.appendChild(pop);
-    const pw = pop.offsetWidth, ph = pop.offsetHeight;
-    let top = rect.bottom + 6, left = rect.left;
-    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
-    if (top + ph > window.innerHeight - 8) top = rect.top - ph - 6;
-    pop.style.top = top + 'px';
-    pop.style.left = left + 'px';
-  };
-
-  window.setGenericItemCategory = function(e, itemId, category) {
-    e.stopPropagation();
-    removeGenericCatPopover();
-    if (genericItemsRef) {
-      update(child(genericItemsRef, itemId), { category });
-    }
   };
 
   window.toggleGenericCheck = function(id) {
@@ -3439,11 +3387,31 @@
   };
 
   let editingItemId = null;
+  let editingItemType = 'shopping'; // 'shopping' or 'generic'
+
+  function setEditModalMode(mode) {
+    const shoppingFields = document.getElementById('edit-shopping-fields');
+    const shoppingFields2 = document.getElementById('edit-shopping-fields-2');
+    const catField = document.getElementById('edit-category-field');
+    if (mode === 'shopping') {
+      if (shoppingFields) shoppingFields.style.display = '';
+      if (shoppingFields2) shoppingFields2.style.display = '';
+      if (catField) catField.style.display = '';
+    } else {
+      if (shoppingFields) shoppingFields.style.display = 'none';
+      if (shoppingFields2) shoppingFields2.style.display = 'none';
+      // Only show category field for generic if the list has categories
+      const cats = getCategoriesForList(activeListId);
+      if (catField) catField.style.display = cats.length ? '' : 'none';
+    }
+  }
 
   window.openEditItem = function(id) {
     const item = shoppingItems.find(i => i.id === id);
     if (!item) return;
     editingItemId = id;
+    editingItemType = 'shopping';
+    setEditModalMode('shopping');
     document.getElementById('edit-item-qty').value = item.qty || '';
     document.getElementById('edit-item-name').value = item.name;
     renderCategorySelects();
@@ -3453,14 +3421,40 @@
     setTimeout(() => document.getElementById('edit-item-name').select(), 50);
   };
 
+  window.openEditGenericItem = function(id) {
+    const item = genericItems.find(i => i.id === id);
+    if (!item) return;
+    editingItemId = id;
+    editingItemType = 'generic';
+    setEditModalMode('generic');
+    document.getElementById('edit-item-name').value = item.name;
+    // Populate category select for generic list
+    const cats = getCategoriesForList(activeListId);
+    const catSel = document.getElementById('edit-item-category');
+    if (catSel && cats.length) {
+      catSel.innerHTML = '<option value="">No category</option>' +
+        cats.map(c => `<option value="${escHtml(c)}"${c === item.category ? ' selected' : ''}>${escHtml(c)}</option>`).join('');
+    }
+    document.getElementById('edit-modal').classList.add('open');
+    setTimeout(() => document.getElementById('edit-item-name').select(), 50);
+  };
+
   window.saveEditItem = function() {
     if (!editingItemId || !db || !auth.currentUser) return;
     const name = document.getElementById('edit-item-name').value.trim();
-    const qty = document.getElementById('edit-item-qty').value.trim();
-    const category = document.getElementById('edit-item-category').value;
-    const store = document.getElementById('edit-item-store')?.value || '';
     if (!name) return;
-    update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${editingItemId}`), { name, qty: qty || '', category, store: store || '' });
+    if (editingItemType === 'generic') {
+      const catField = document.getElementById('edit-category-field');
+      const category = catField && catField.style.display !== 'none'
+        ? document.getElementById('edit-item-category').value
+        : '';
+      update(child(genericItemsRef, editingItemId), { name, category });
+    } else {
+      const qty = document.getElementById('edit-item-qty').value.trim();
+      const category = document.getElementById('edit-item-category').value;
+      const store = document.getElementById('edit-item-store')?.value || '';
+      update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${editingItemId}`), { name, qty: qty || '', category, store: store || '' });
+    }
     closeEditModal();
   };
 
