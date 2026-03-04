@@ -749,6 +749,12 @@
   .recipe-list-tag-btn { margin-left:auto; flex-shrink:0; background:none; border:1.5px solid var(--border); border-radius:8px; padding:5px 9px; font-size:0.75rem; color:var(--muted); cursor:pointer; transition:border-color 0.15s,color 0.15s; white-space:nowrap; }
   .recipe-list-tag-btn:hover { border-color:var(--accent); color:var(--accent); }
 
+  /* ── Generic item category label ── */
+  .generic-item-cat { font-size:0.72rem; padding:2px 8px; border-radius:20px; border:1.5px solid var(--accent)50; color:var(--accent); background:var(--accent)10; cursor:pointer; white-space:nowrap; transition:background 0.15s; flex-shrink:0; }
+  .generic-item-cat:hover { background:var(--accent)20; }
+  .generic-item-cat.empty { border-style:dashed; color:var(--muted); background:none; border-color:var(--border); }
+  .generic-item-cat.empty:hover { border-color:var(--accent); color:var(--accent); }
+
   /* ── Quick-tag popover ── */
   .quick-tag-popover { position:fixed; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.12); padding:12px; z-index:300; min-width:180px; max-width:240px; }
   .quick-tag-popover-title { font-size:0.72rem; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
@@ -1017,7 +1023,6 @@
       </div>
       <div class="add-form">
         <input type="text" id="generic-item-input" placeholder="Add an item…" autocomplete="off">
-        <select id="generic-item-category" style="display:none"></select>
         <button class="btn-add" onclick="addGenericItem()">Add</button>
       </div>
       <div id="generic-active-list"></div>
@@ -1480,10 +1485,7 @@
           onValue(catRef, csnap => {
             const cd = csnap.val();
             listCategories[list.id] = cd ? Object.entries(cd).map(([id,v]) => ({id,...v})).sort((a,b) => (a.order||0)-(b.order||0)) : null;
-            if (activeListId === list.id) {
-              renderCategorySelects();
-              if (list.type === 'generic') renderGenericCategorySelect(list.id);
-            }
+            if (activeListId === list.id) renderCategorySelects();
             renderSettingsCategoriesSection();
           });
         }
@@ -2076,7 +2078,6 @@
     const toggleBtn = document.getElementById('generic-checked-toggle');
     if (checkedEl) { checkedEl.classList.remove('visible'); checkedEl.innerHTML = ''; }
     if (toggleBtn) { toggleBtn.classList.remove('open'); toggleBtn.style.display = 'none'; }
-    renderGenericCategorySelect(listId);
     genericItemsRef = ref(db, `users/${auth.currentUser.uid}/genericLists/${listId}`);
     onValue(genericItemsRef, snap => {
       const d = snap.val();
@@ -2086,9 +2087,14 @@
   }
 
   function genericItemHtml(item, isChecked) {
+    const hasCats = getCategoriesForList(activeListId).length > 0;
+    const catLabel = item.category
+      ? `<span class="generic-item-cat" onclick="openGenericCatPopover(event,'${item.id}')">${escHtml(item.category)}</span>`
+      : (hasCats ? `<span class="generic-item-cat empty" onclick="openGenericCatPopover(event,'${item.id}')">+ category</span>` : '');
     return `<li class="item${isChecked?' checked':''}">
       <input type="checkbox" class="item-check"${isChecked?' checked':''} onchange="toggleGenericCheck('${item.id}')">
       <span class="item-name">${escHtml(item.name)}</span>
+      ${catLabel}
       <button class="btn-icon" onclick="deleteGenericItem('${item.id}')" title="Remove">✕</button>
     </li>`;
   }
@@ -2146,28 +2152,64 @@
     }
   }
 
-  window.renderGenericCategorySelect = function renderGenericCategorySelect(listId) {
-    const sel = document.getElementById('generic-item-category');
-    if (!sel) return;
-    const cats = getCategoriesForList(listId);
-    if (cats.length === 0) {
-      sel.style.display = 'none';
-      return;
-    }
-    sel.style.display = '';
-    const cur = sel.value;
-    sel.innerHTML = cats.map(c => `<option value="${escHtml(c)}"${c===cur?' selected':''}>${escHtml(c)}</option>`).join('');
-  };
+
 
   window.addGenericItem = function() {
     const input = document.getElementById('generic-item-input');
     const name = input.value.trim();
     if (!name || !genericItemsRef) return;
-    const catSel = document.getElementById('generic-item-category');
-    const category = catSel && catSel.style.display !== 'none' ? catSel.value : '';
-    push(genericItemsRef, { name, category, checked: false });
+    push(genericItemsRef, { name, category: '', checked: false });
     input.value = '';
     input.focus();
+  };
+
+  // ── Generic item category popover ──────────────────────────────────────────
+  let _gcatPopover = null;
+  function removeGenericCatPopover() {
+    if (_gcatPopover) { _gcatPopover.remove(); _gcatPopover = null; }
+  }
+  document.addEventListener('click', function(e) {
+    if (_gcatPopover && !_gcatPopover.contains(e.target)) removeGenericCatPopover();
+  });
+
+  window.openGenericCatPopover = function(e, itemId) {
+    e.stopPropagation();
+    removeGenericCatPopover();
+    const cats = getCategoriesForList(activeListId);
+    if (!cats.length) return;
+
+    const item = genericItems.find(i => i.id === itemId);
+    const pop = document.createElement('div');
+    pop.className = 'quick-tag-popover';
+    _gcatPopover = pop;
+
+    pop.innerHTML = `<div class="quick-tag-popover-title">Category</div>
+      <div class="quick-tag-popover-tags">
+        ${item && item.category ? `<button class="quick-tag-toggle on" style="--tag-color:var(--muted);color:var(--muted);border-color:var(--muted);background:var(--muted)10" onclick="setGenericItemCategory(event,'${itemId}','')">✕ None</button>` : ''}
+        ${cats.map(cat => {
+          const active = item && item.category === cat;
+          return `<button class="quick-tag-toggle${active?' on':''}"
+            style="color:var(--accent);border-color:var(--accent)${active?'':'60'};${active?'background:var(--accent)15':''}"
+            onclick="setGenericItemCategory(event,'${itemId}','${escHtml(cat)}')">${escHtml(cat)}</button>`;
+        }).join('')}
+      </div>`;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    document.body.appendChild(pop);
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let top = rect.bottom + 6, left = rect.left;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    if (top + ph > window.innerHeight - 8) top = rect.top - ph - 6;
+    pop.style.top = top + 'px';
+    pop.style.left = left + 'px';
+  };
+
+  window.setGenericItemCategory = function(e, itemId, category) {
+    e.stopPropagation();
+    removeGenericCatPopover();
+    if (genericItemsRef) {
+      update(child(genericItemsRef, itemId), { category });
+    }
   };
 
   window.toggleGenericCheck = function(id) {
@@ -2670,7 +2712,10 @@
 
   function getCategoriesForList(listId) {
     const cats = listId ? listCategories[listId] : null;
-    return cats && cats.length > 0 ? cats.map(c => c.name) : DEFAULT_CATEGORIES;
+    if (cats && cats.length > 0) return cats.map(c => c.name);
+    // Only use defaults for shopping lists — generic lists start empty
+    const list = userLists.find(l => l.id === listId);
+    return list && list.type === 'shopping' ? DEFAULT_CATEGORIES : [];
   }
 
   function getCategoryDefault() {
