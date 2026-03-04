@@ -313,6 +313,7 @@
     padding: 0 12px;
     padding-left: max(12px, env(safe-area-inset-left));
     padding-right: max(12px, env(safe-area-inset-right));
+    padding-top: env(safe-area-inset-top);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -530,6 +531,7 @@
       right: 0;
       border-bottom: none;
       border-top: 1.5px solid var(--border);
+      padding-top: 0;
       padding-bottom: max(8px, env(safe-area-inset-bottom));
       z-index: 100;
     }
@@ -2044,6 +2046,10 @@
 
   function connectGenericListShared(ownerUid, listId) {
     if (genericItemsRef) { off(genericItemsRef); genericItemsRef = null; }
+    const checkedEl = document.getElementById('generic-checked-section');
+    const toggleBtn = document.getElementById('generic-checked-toggle');
+    if (checkedEl) { checkedEl.classList.remove('visible'); checkedEl.innerHTML = ''; }
+    if (toggleBtn) { toggleBtn.classList.remove('open'); toggleBtn.style.display = 'none'; }
     genericItemsRef = ref(db, `users/${ownerUid}/genericLists/${listId}`);
     onValue(genericItemsRef, snap => {
       const d = snap.val();
@@ -2055,6 +2061,11 @@
   function connectGenericList(listId) {
     if (genericItemsRef) { off(genericItemsRef); genericItemsRef = null; }
     if (!auth.currentUser) return;
+    // Reset checked section to collapsed state when opening a list
+    const checkedEl = document.getElementById('generic-checked-section');
+    const toggleBtn = document.getElementById('generic-checked-toggle');
+    if (checkedEl) { checkedEl.classList.remove('visible'); checkedEl.innerHTML = ''; }
+    if (toggleBtn) { toggleBtn.classList.remove('open'); toggleBtn.style.display = 'none'; }
     genericItemsRef = ref(db, `users/${auth.currentUser.uid}/genericLists/${listId}`);
     onValue(genericItemsRef, snap => {
       const d = snap.val();
