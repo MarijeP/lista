@@ -749,6 +749,13 @@
   .recipe-list-tag-btn { margin-left:auto; flex-shrink:0; background:none; border:1.5px solid var(--border); border-radius:8px; padding:5px 9px; font-size:0.75rem; color:var(--muted); cursor:pointer; transition:border-color 0.15s,color 0.15s; white-space:nowrap; }
   .recipe-list-tag-btn:hover { border-color:var(--accent); color:var(--accent); }
 
+  /* ── Autocomplete dropdown ── */
+  .autocomplete-dropdown { position:absolute; top:100%; left:0; right:0; z-index:200; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.1); margin-top:4px; overflow:hidden; }
+  .autocomplete-item { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; transition:background 0.12s; }
+  .autocomplete-item:hover, .autocomplete-item.active { background:var(--accent)10; }
+  .autocomplete-item-name { flex:1; font-size:0.92rem; }
+  .autocomplete-item-cat { font-size:0.75rem; color:var(--muted); }
+
   /* ── Scheduled item badge ── */
   .item-scheduled-badge { display:inline-flex; align-items:center; gap:3px; font-size:0.7rem; padding:2px 7px; border-radius:20px; background:var(--accent)12; color:var(--accent); border:1px solid var(--accent)30; white-space:nowrap; flex-shrink:0; }
   .item.scheduled { opacity:0.6; }
@@ -1018,9 +1025,10 @@
         <div class="sync-dot connecting" id="sync-dot"></div>
         <span id="sync-label">Connecting…</span>
       </div>
-      <div class="add-form">
+      <div class="add-form" style="position:relative">
         <input type="text" id="item-input" placeholder="Add an item…" autocomplete="off">
         <button class="btn-add" onclick="addItem()">Add</button>
+        <div class="autocomplete-dropdown" id="shopping-autocomplete" style="display:none"></div>
       </div>
       <div class="dupe-warning" id="dupe-warning" style="display:none">
         <span id="dupe-warning-text"></span>
@@ -1052,9 +1060,10 @@
         <button class="btn-back-lists" onclick="backToLists()">← Lists</button>
         <h2 id="generic-list-title">List</h2>
       </div>
-      <div class="add-form">
+      <div class="add-form" style="position:relative">
         <input type="text" id="generic-item-input" placeholder="Add an item…" autocomplete="off">
         <button class="btn-add" onclick="addGenericItem()">Add</button>
+        <div class="autocomplete-dropdown" id="generic-autocomplete" style="display:none"></div>
       </div>
       <div id="generic-active-list"></div>
       <button class="scheduled-section-toggle" id="generic-scheduled-toggle" onclick="toggleGenericScheduled()" style="display:none">
@@ -1501,6 +1510,7 @@
   const db = isConfigured ? getDatabase(app) : null;
 
   let shoppingItems = [], recipes = [], userTags = [], userStores = [], userLists = [], sharedLists = [];
+  let itemHistory = {}; // { listId: { normalisedName: { name, category, lastUsed } } }
   let shoppingRef = null, recipesRef = null, tagsRef = null, storesRef = null, listsRef = null, sharedListsRef = null;
   let activeStoreFilter = '', activeListId = null, activeListType = null, activeSharedOwnerUid = null;
   let genericItemsRef = null, genericItems = [];
@@ -1979,10 +1989,12 @@
       document.getElementById('shopping-list-title').textContent = list.name;
       document.getElementById('list-view-shopping').style.display = 'block';
       renderCategorySelects();
+      loadHistory(listId);
     } else {
       document.getElementById('generic-list-title').textContent = list.name;
       document.getElementById('list-view-generic').style.display = 'block';
       connectGenericList(listId);
+      loadHistory(listId);
     }
   };
 
@@ -2306,6 +2318,8 @@
     const name = input.value.trim();
     if (!name || !genericItemsRef) return;
     push(genericItemsRef, { name, category: '', checked: false });
+    saveToHistory(activeListId, name, '');
+    hideAutocomplete('generic-autocomplete');
     input.value = '';
     input.focus();
   };
@@ -2717,6 +2731,8 @@
     return shoppingItems.find(i => fuzzyMatch(i.name, name));
   }
 
+  let _suggestedCategory = null; // set when user picks from autocomplete
+
   function doAddItem() {
     const input = document.getElementById('item-input');
     const qtyInput = document.getElementById('qty-input');
@@ -2736,8 +2752,11 @@
       }
     }
 
-    const cat = guessCategory(name) || getCategoryDefault();
+    const cat = _suggestedCategory || guessCategory(name) || getCategoryDefault();
+    _suggestedCategory = null;
     push(shoppingRef, { name, qty: qty || '', category: cat, store: storeId, checked: false });
+    saveToHistory(activeListId, name, cat);
+    hideAutocomplete('shopping-autocomplete');
     input.value = '';
     if (qtyInput) qtyInput.value = '';
     document.getElementById('dupe-warning').style.display = 'none';
@@ -3568,6 +3587,80 @@
     }
   };
 
+  // ── Item history / autocomplete ──────────────────────────────────────────────
+  function historyKey(name) {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 80);
+  }
+
+  function saveToHistory(listId, name, category) {
+    if (!name || !listId || !auth.currentUser) return;
+    const uid = auth.currentUser.uid;
+    const key = historyKey(name);
+    set(ref(db, `users/${uid}/itemHistory/${listId}/${key}`), {
+      name, category: category || '', lastUsed: Date.now()
+    });
+  }
+
+  function loadHistory(listId) {
+    if (!listId || !auth.currentUser) return;
+    const uid = auth.currentUser.uid;
+    onValue(ref(db, `users/${uid}/itemHistory/${listId}`), snap => {
+      const d = snap.val();
+      itemHistory[listId] = d ? d : {};
+    }, { onlyOnce: true });
+  }
+
+  function getHistorySuggestions(listId, query) {
+    if (!query || !itemHistory[listId]) return [];
+    const q = query.toLowerCase();
+    return Object.values(itemHistory[listId])
+      .filter(h => h.name.toLowerCase().includes(q))
+      .sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))
+      .slice(0, 6);
+  }
+
+  let _acActiveIndex = -1;
+
+  function showAutocomplete(dropdownId, suggestions, onSelect) {
+    const el = document.getElementById(dropdownId);
+    if (!el) return;
+    if (!suggestions.length) { el.style.display = 'none'; return; }
+    _acActiveIndex = -1;
+    el.style.display = 'block';
+    el.innerHTML = suggestions.map((s, i) =>
+      `<div class="autocomplete-item" data-index="${i}" onmousedown="event.preventDefault()" onclick="(${onSelect.toString()})('${s.name.replace(/'/g,"\'")}','${(s.category||'').replace(/'/g,"\'")}')">
+        <span class="autocomplete-item-name">${escHtml(s.name)}</span>
+        ${s.category ? `<span class="autocomplete-item-cat">${escHtml(s.category)}</span>` : ''}
+      </div>`
+    ).join('');
+  }
+
+  function hideAutocomplete(dropdownId) {
+    const el = document.getElementById(dropdownId);
+    if (el) el.style.display = 'none';
+    _acActiveIndex = -1;
+  }
+
+  function navigateAutocomplete(dropdownId, direction) {
+    const el = document.getElementById(dropdownId);
+    if (!el || el.style.display === 'none') return false;
+    const items = el.querySelectorAll('.autocomplete-item');
+    if (!items.length) return false;
+    items.forEach(i => i.classList.remove('active'));
+    _acActiveIndex = (_acActiveIndex + direction + items.length) % items.length;
+    items[_acActiveIndex].classList.add('active');
+    return true;
+  }
+
+  function selectActiveAutocomplete(dropdownId, inputId, onSelect) {
+    const el = document.getElementById(dropdownId);
+    if (!el || el.style.display === 'none' || _acActiveIndex < 0) return false;
+    const active = el.querySelector('.autocomplete-item.active');
+    if (!active) return false;
+    active.click();
+    return true;
+  }
+
   // ── Schedule helpers ─────────────────────────────────────────────────────────
   function getScheduleDateTs() {
     const val = document.getElementById('edit-schedule-date')?.value;
@@ -3786,15 +3879,58 @@
 
   document.getElementById('item-input')?.addEventListener('input', e => {
     const name = e.target.value.trim();
-    if (!name) document.getElementById('dupe-warning').style.display = 'none';
+    if (!name) {
+      document.getElementById('dupe-warning').style.display = 'none';
+      hideAutocomplete('shopping-autocomplete');
+      return;
+    }
+    const suggestions = getHistorySuggestions(activeListId, name);
+    showAutocomplete('shopping-autocomplete', suggestions, function(itemName, itemCat) {
+      const input = document.getElementById('item-input');
+      input.value = itemName;
+      if (itemCat) _suggestedCategory = itemCat;
+      hideAutocomplete('shopping-autocomplete');
+      input.focus();
+    });
   });
   document.getElementById('item-input')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') window.addItem();
+    if (e.key === 'ArrowDown') { navigateAutocomplete('shopping-autocomplete', 1); e.preventDefault(); return; }
+    if (e.key === 'ArrowUp')   { navigateAutocomplete('shopping-autocomplete', -1); e.preventDefault(); return; }
+    if (e.key === 'Escape')    { hideAutocomplete('shopping-autocomplete'); return; }
+    if (e.key === 'Enter') {
+      if (selectActiveAutocomplete('shopping-autocomplete')) return;
+      window.addItem();
+    }
+  });
+  document.getElementById('item-input')?.addEventListener('blur', () => {
+    setTimeout(() => hideAutocomplete('shopping-autocomplete'), 150);
   });
   document.getElementById('login-password')?.addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
   document.getElementById('edit-item-name')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.saveEditItem(); if (e.key === 'Escape') window.closeEditModal(); });
   document.getElementById('import-url-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.importFromUrl(); if (e.key === 'Escape') window.closeUrlImportModal(); });
-  document.getElementById('generic-item-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addGenericItem(); });
+  document.getElementById('generic-item-input')?.addEventListener('input', e => {
+    const name = e.target.value.trim();
+    if (!name) { hideAutocomplete('generic-autocomplete'); return; }
+    const suggestions = getHistorySuggestions(activeListId, name);
+    showAutocomplete('generic-autocomplete', suggestions, function(itemName, itemCat) {
+      const input = document.getElementById('generic-item-input');
+      input.value = itemName;
+      hideAutocomplete('generic-autocomplete');
+      input.focus();
+    });
+  });
+  document.getElementById('generic-item-input')?.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { navigateAutocomplete('generic-autocomplete', 1); e.preventDefault(); return; }
+    if (e.key === 'ArrowUp')   { navigateAutocomplete('generic-autocomplete', -1); e.preventDefault(); return; }
+    if (e.key === 'Escape')    { hideAutocomplete('generic-autocomplete'); return; }
+    if (e.key === 'Enter') {
+      if (selectActiveAutocomplete('generic-autocomplete')) return;
+      window.addGenericItem();
+    }
+  });
+  document.getElementById('generic-item-input')?.addEventListener('blur', () => {
+    setTimeout(() => hideAutocomplete('generic-autocomplete'), 150);
+  });
   document.getElementById('new-store-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addStore(); });
   document.getElementById('share-invite-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.inviteCollaborator(); });
   document.getElementById('rename-list-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.saveRenameList(); if (e.key === 'Escape') window.closeRenameList(); });
