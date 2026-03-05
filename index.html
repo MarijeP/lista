@@ -3673,12 +3673,14 @@
 
   function navigateAutocomplete(dropdownId, direction) {
     const el = document.getElementById(dropdownId);
+    console.log('[NAV] el:', el, 'display:', el?.style.display, 'items:', el?.querySelectorAll('.autocomplete-item').length);
     if (!el || el.style.display === 'none') return false;
     const items = el.querySelectorAll('.autocomplete-item');
     if (!items.length) return false;
     items.forEach(i => i.classList.remove('active'));
     if (_acActiveIndex + direction < 0) { _acActiveIndex = -1; return true; }
     _acActiveIndex = Math.min(_acActiveIndex + direction, items.length - 1);
+    console.log('[NAV] new index:', _acActiveIndex, 'item:', items[_acActiveIndex]);
     if (_acActiveIndex >= 0) items[_acActiveIndex].classList.add('active');
     return true;
   }
