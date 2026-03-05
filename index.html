@@ -1638,7 +1638,7 @@
     if (listsRef) { off(listsRef); listsRef = null; }
     if (sharedListsRef) { off(sharedListsRef); sharedListsRef = null; }
     if (genericItemsRef) { off(genericItemsRef); genericItemsRef = null; }
-    shoppingItems = []; recipes = []; userTags = []; userStores = []; userLists = []; sharedLists = []; genericItems = [];
+    shoppingItems = []; recipes = []; userTags = []; userStores = []; userLists = []; sharedLists = []; genericItems = []; itemHistory = {};
     listCategories = {}; settingsCategoryListId = null;
     activeStoreFilter = ''; activeListId = null; activeListType = null;
   }
@@ -3603,11 +3603,11 @@
 
   function loadHistory(listId) {
     if (!listId || !auth.currentUser) return;
+    if (itemHistory[listId]) return; // already loaded
     const uid = auth.currentUser.uid;
-    onValue(ref(db, `users/${uid}/itemHistory/${listId}`), snap => {
-      const d = snap.val();
-      itemHistory[listId] = d ? d : {};
-    }, { onlyOnce: true });
+    get(ref(db, `users/${uid}/itemHistory/${listId}`)).then(snap => {
+      itemHistory[listId] = snap.val() || {};
+    });
   }
 
   function getHistorySuggestions(listId, query) {
@@ -3620,19 +3620,30 @@
   }
 
   let _acActiveIndex = -1;
+  let _acCurrentDropdown = null;
+  let _acCurrentCallback = null;
 
   function showAutocomplete(dropdownId, suggestions, onSelect) {
     const el = document.getElementById(dropdownId);
     if (!el) return;
     if (!suggestions.length) { el.style.display = 'none'; return; }
     _acActiveIndex = -1;
+    _acCurrentDropdown = dropdownId;
+    _acCurrentCallback = onSelect;
     el.style.display = 'block';
     el.innerHTML = suggestions.map((s, i) =>
-      `<div class="autocomplete-item" data-index="${i}" onmousedown="event.preventDefault()" onclick="(${onSelect.toString()})('${s.name.replace(/'/g,"\'")}','${(s.category||'').replace(/'/g,"\'")}')">
+      `<div class="autocomplete-item" data-index="${i}" data-name="${escHtml(s.name)}" data-cat="${escHtml(s.category||'')}">
         <span class="autocomplete-item-name">${escHtml(s.name)}</span>
         ${s.category ? `<span class="autocomplete-item-cat">${escHtml(s.category)}</span>` : ''}
       </div>`
     ).join('');
+    // Attach click handlers directly
+    el.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('mousedown', e => e.preventDefault());
+      item.addEventListener('click', () => {
+        onSelect(item.dataset.name, item.dataset.cat);
+      });
+    });
   }
 
   function hideAutocomplete(dropdownId) {
@@ -3647,12 +3658,13 @@
     const items = el.querySelectorAll('.autocomplete-item');
     if (!items.length) return false;
     items.forEach(i => i.classList.remove('active'));
-    _acActiveIndex = (_acActiveIndex + direction + items.length) % items.length;
-    items[_acActiveIndex].classList.add('active');
+    if (_acActiveIndex + direction < 0) { _acActiveIndex = -1; return true; }
+    _acActiveIndex = Math.min(_acActiveIndex + direction, items.length - 1);
+    if (_acActiveIndex >= 0) items[_acActiveIndex].classList.add('active');
     return true;
   }
 
-  function selectActiveAutocomplete(dropdownId, inputId, onSelect) {
+  function selectActiveAutocomplete(dropdownId) {
     const el = document.getElementById(dropdownId);
     if (!el || el.style.display === 'none' || _acActiveIndex < 0) return false;
     const active = el.querySelector('.autocomplete-item.active');
