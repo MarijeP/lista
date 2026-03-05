@@ -750,7 +750,7 @@
   .recipe-list-tag-btn:hover { border-color:var(--accent); color:var(--accent); }
 
   /* ── Autocomplete dropdown ── */
-  .autocomplete-dropdown { position:absolute; top:100%; left:0; right:0; z-index:200; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.1); margin-top:4px; overflow:hidden; }
+  .autocomplete-dropdown { position:fixed; z-index:1000; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.12); overflow:hidden; }
   .autocomplete-item { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; transition:background 0.12s; }
   .autocomplete-item:hover, .autocomplete-item.active { background:var(--accent)10; }
   .autocomplete-item-name { flex:1; font-size:0.92rem; }
@@ -1025,10 +1025,9 @@
         <div class="sync-dot connecting" id="sync-dot"></div>
         <span id="sync-label">Connecting…</span>
       </div>
-      <div class="add-form" style="position:relative">
+      <div class="add-form">
         <input type="text" id="item-input" placeholder="Add an item…" autocomplete="off">
         <button class="btn-add" onclick="addItem()">Add</button>
-        <div class="autocomplete-dropdown" id="shopping-autocomplete" style="display:none"></div>
       </div>
       <div class="dupe-warning" id="dupe-warning" style="display:none">
         <span id="dupe-warning-text"></span>
@@ -1060,10 +1059,9 @@
         <button class="btn-back-lists" onclick="backToLists()">← Lists</button>
         <h2 id="generic-list-title">List</h2>
       </div>
-      <div class="add-form" style="position:relative">
+      <div class="add-form">
         <input type="text" id="generic-item-input" placeholder="Add an item…" autocomplete="off">
         <button class="btn-add" onclick="addGenericItem()">Add</button>
-        <div class="autocomplete-dropdown" id="generic-autocomplete" style="display:none"></div>
       </div>
       <div id="generic-active-list"></div>
       <button class="scheduled-section-toggle" id="generic-scheduled-toggle" onclick="toggleGenericScheduled()" style="display:none">
@@ -3629,27 +3627,42 @@
   let _acCurrentDropdown = null;
   let _acCurrentCallback = null;
 
-  function showAutocomplete(dropdownId, suggestions, onSelect) {
-    const el = document.getElementById(dropdownId);
-    if (!el) return;
-    if (!suggestions.length) { el.style.display = 'none'; return; }
+  function showAutocomplete(dropdownId, suggestions, onSelect, anchorId) {
+    if (!suggestions.length) { hideAutocomplete(dropdownId); return; }
+
+    let el = document.getElementById(dropdownId);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = dropdownId;
+      el.className = 'autocomplete-dropdown';
+      document.body.appendChild(el);
+    }
+
     _acActiveIndex = -1;
     _acCurrentDropdown = dropdownId;
     _acCurrentCallback = onSelect;
-    el.style.display = 'block';
+
     el.innerHTML = suggestions.map((s, i) =>
       `<div class="autocomplete-item" data-index="${i}" data-name="${escHtml(s.name)}" data-cat="${escHtml(s.category||'')}">
         <span class="autocomplete-item-name">${escHtml(s.name)}</span>
         ${s.category ? `<span class="autocomplete-item-cat">${escHtml(s.category)}</span>` : ''}
       </div>`
     ).join('');
-    // Attach click handlers directly
+
     el.querySelectorAll('.autocomplete-item').forEach(item => {
       item.addEventListener('mousedown', e => e.preventDefault());
-      item.addEventListener('click', () => {
-        onSelect(item.dataset.name, item.dataset.cat);
-      });
+      item.addEventListener('click', () => onSelect(item.dataset.name, item.dataset.cat));
     });
+
+    // Position below the anchor input
+    const anchor = document.getElementById(anchorId || (dropdownId === 'shopping-autocomplete' ? 'item-input' : 'generic-item-input'));
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
+      el.style.display = 'block';
+      el.style.left = rect.left + 'px';
+      el.style.top = (rect.bottom + 4) + 'px';
+      el.style.width = rect.width + 'px';
+    }
   }
 
   function hideAutocomplete(dropdownId) {
