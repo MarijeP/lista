@@ -1386,22 +1386,25 @@
     </div>
     <div class="schedule-section">
       <div class="schedule-section-title">📅 Schedule</div>
-      <div class="schedule-row">
-        <span style="font-size:0.88rem;color:var(--muted);white-space:nowrap">Every</span>
-        <input type="number" id="edit-schedule-amount" min="1" max="999" placeholder="1" style="width:70px;flex:none">
-        <select id="edit-schedule-unit">
-          <option value="hours">hours</option>
-          <option value="days" selected>days</option>
-          <option value="weeks">weeks</option>
-          <option value="months">months</option>
-          <option value="years">years</option>
-        </select>
-        <select id="edit-schedule-repeat">
-          <option value="once">once</option>
-          <option value="repeat">repeating</option>
-        </select>
+      <div class="form-field" style="margin-bottom:10px">
+        <label>Appear on</label>
+        <input type="date" id="edit-schedule-date">
       </div>
-      <button class="clear-schedule-btn" id="clear-schedule-btn" onclick="clearSchedule()" style="display:none;margin-top:6px">✕ Remove schedule</button>
+      <div class="form-field" style="margin-bottom:4px">
+        <label>Repeat every</label>
+        <div class="schedule-row">
+          <input type="number" id="edit-schedule-amount" min="1" max="999" placeholder="e.g. 2" style="width:80px;flex:none">
+          <select id="edit-schedule-unit">
+            <option value="hours">hours</option>
+            <option value="days" selected>days</option>
+            <option value="weeks">weeks</option>
+            <option value="months">months</option>
+            <option value="years">years</option>
+          </select>
+        </div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-top:4px">Leave blank for one-off. If set, the date above is the first occurrence.</div>
+      </div>
+      <button class="clear-schedule-btn" id="clear-schedule-btn" onclick="clearSchedule()" style="display:none;margin-top:8px">✕ Remove schedule</button>
     </div>
     <div class="modal-actions">
       <button class="btn-primary" onclick="saveEditItem()">Save</button>
@@ -2302,7 +2305,7 @@
   window.toggleGenericCheck = function(id) {
     const item = genericItems.find(i => i.id === id);
     if (!item || !genericItemsRef) return;
-    if (!item.checked && item.scheduleRepeat === 'repeat' && item.scheduledDate) {
+    if (!item.checked && item.scheduleAmount && item.scheduledDate) {
       const next = nextOccurrence(item.scheduledDate, item.scheduleAmount, item.scheduleUnit);
       update(child(genericItemsRef, id), { checked: true, scheduledDate: next });
     } else {
@@ -2782,7 +2785,8 @@
   window.toggleCheck = function(id) {
     const item = shoppingItems.find(i => i.id === id);
     if (!item || !db || !auth.currentUser) return;
-    if (!item.checked && item.scheduleRepeat === 'repeat' && item.scheduledDate) {
+    if (!item.checked && item.scheduleAmount && item.scheduledDate) {
+      // Repeating — reschedule to next occurrence and hide again
       const next = nextOccurrence(item.scheduledDate, item.scheduleAmount, item.scheduleUnit);
       update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${id}`), { checked: true, scheduledDate: next });
     } else {
@@ -3555,22 +3559,16 @@
   };
 
   // ── Schedule helpers ─────────────────────────────────────────────────────────
-  function computeScheduledDate(amount, unit) {
-    const n = parseInt(amount, 10);
-    if (!n || n < 1) return null;
-    const d = new Date();
-    if (unit === 'hours')  d.setHours(d.getHours() + n);
-    else if (unit === 'days')   d.setDate(d.getDate() + n);
-    else if (unit === 'weeks')  d.setDate(d.getDate() + n * 7);
-    else if (unit === 'months') d.setMonth(d.getMonth() + n);
-    else if (unit === 'years')  d.setFullYear(d.getFullYear() + n);
-    return d.getTime();
+  function toDateInputValue(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   }
 
   function nextOccurrence(ts, scheduleAmount, scheduleUnit) {
     const n = parseInt(scheduleAmount, 10) || 1;
     const d = new Date(ts);
-    if (scheduleUnit === 'hours')  d.setHours(d.getHours() + n);
+    if (scheduleUnit === 'hours')       d.setHours(d.getHours() + n);
     else if (scheduleUnit === 'days')   d.setDate(d.getDate() + n);
     else if (scheduleUnit === 'weeks')  d.setDate(d.getDate() + n * 7);
     else if (scheduleUnit === 'months') d.setMonth(d.getMonth() + n);
@@ -3581,12 +3579,8 @@
   function scheduledBadgeHtml(item) {
     if (!item.scheduledDate) return '';
     const d = new Date(item.scheduledDate);
-    const now = new Date();
-    const diffH = (item.scheduledDate - now.getTime()) / 3600000;
-    let label;
-    if (diffH < 24) label = `${Math.max(1, Math.round(diffH))}h`;
-    else label = d.toLocaleDateString(undefined, { day:'numeric', month:'short' });
-    const repeatIcon = item.scheduleRepeat === 'repeat' ? ' 🔁' : '';
+    const label = d.toLocaleDateString(undefined, { day:'numeric', month:'short', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+    const repeatIcon = item.scheduleAmount ? ' 🔁' : '';
     return `<span class="item-scheduled-badge">📅 ${label}${repeatIcon}</span>`;
   }
 
@@ -3596,28 +3590,28 @@
   }
 
   function populateScheduleFields(item) {
+    const dateEl = document.getElementById('edit-schedule-date');
     const amountEl = document.getElementById('edit-schedule-amount');
     const unitEl = document.getElementById('edit-schedule-unit');
-    const repeatEl = document.getElementById('edit-schedule-repeat');
     const clearBtn = document.getElementById('clear-schedule-btn');
-    if (!amountEl || !unitEl || !repeatEl) return;
+    if (!dateEl || !amountEl || !unitEl) return;
     if (item && item.scheduledDate) {
-      amountEl.value = item.scheduleAmount || 1;
+      dateEl.value = toDateInputValue(item.scheduledDate);
+      amountEl.value = item.scheduleAmount || '';
       unitEl.value = item.scheduleUnit || 'days';
-      repeatEl.value = item.scheduleRepeat || 'once';
       if (clearBtn) clearBtn.style.display = '';
     } else {
+      dateEl.value = '';
       amountEl.value = '';
       unitEl.value = 'days';
-      repeatEl.value = 'once';
       if (clearBtn) clearBtn.style.display = 'none';
     }
   }
 
   window.clearSchedule = function() {
+    document.getElementById('edit-schedule-date').value = '';
     document.getElementById('edit-schedule-amount').value = '';
     document.getElementById('edit-schedule-unit').value = 'days';
-    document.getElementById('edit-schedule-repeat').value = 'once';
     document.getElementById('clear-schedule-btn').style.display = 'none';
   };
 
@@ -3701,23 +3695,22 @@
     if (!name) return;
 
     // Read schedule fields
+    const dateVal = document.getElementById('edit-schedule-date').value;
     const scheduleAmount = document.getElementById('edit-schedule-amount').value.trim();
     const scheduleUnit = document.getElementById('edit-schedule-unit').value;
-    const scheduleRepeat = document.getElementById('edit-schedule-repeat').value;
-    const scheduledDate = scheduleAmount ? computeScheduledDate(scheduleAmount, scheduleUnit) : null;
+    const scheduledDate = dateVal ? new Date(dateVal + 'T00:00:00').getTime() : null;
+    const isRepeating = scheduledDate && scheduleAmount && parseInt(scheduleAmount, 10) > 0;
 
     if (editingItemType === 'generic') {
       const catField = document.getElementById('edit-category-field');
       const category = catField && catField.style.display !== 'none'
-        ? document.getElementById('edit-item-category').value
-        : '';
+        ? document.getElementById('edit-item-category').value : '';
       const updates = { name, category,
         scheduledDate: scheduledDate || null,
-        scheduleAmount: scheduledDate ? scheduleAmount : null,
-        scheduleUnit: scheduledDate ? scheduleUnit : null,
-        scheduleRepeat: scheduledDate ? scheduleRepeat : null,
+        scheduleAmount: isRepeating ? scheduleAmount : null,
+        scheduleUnit: isRepeating ? scheduleUnit : null,
       };
-      if (scheduledDate) updates.checked = true;
+      if (scheduledDate && scheduledDate > Date.now()) updates.checked = true;
       update(child(genericItemsRef, editingItemId), updates);
     } else {
       const qty = document.getElementById('edit-item-qty').value.trim();
@@ -3725,11 +3718,10 @@
       const store = document.getElementById('edit-item-store')?.value || '';
       const updates = { name, qty: qty || '', category, store: store || '',
         scheduledDate: scheduledDate || null,
-        scheduleAmount: scheduledDate ? scheduleAmount : null,
-        scheduleUnit: scheduledDate ? scheduleUnit : null,
-        scheduleRepeat: scheduledDate ? scheduleRepeat : null,
+        scheduleAmount: isRepeating ? scheduleAmount : null,
+        scheduleUnit: isRepeating ? scheduleUnit : null,
       };
-      if (scheduledDate) updates.checked = true;
+      if (scheduledDate && scheduledDate > Date.now()) updates.checked = true;
       update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${editingItemId}`), updates);
     }
     closeEditModal();
