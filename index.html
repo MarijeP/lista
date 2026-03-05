@@ -3926,11 +3926,14 @@
     });
   });
   document.getElementById('item-input')?.addEventListener('keydown', e => {
+    console.log('[KEY]', e.key, '_acActiveIndex:', _acActiveIndex, 'dropdown visible:', document.getElementById('shopping-autocomplete')?.style.display);
     if (e.key === 'ArrowDown') { navigateAutocomplete('shopping-autocomplete', 1); e.preventDefault(); return; }
     if (e.key === 'ArrowUp')   { navigateAutocomplete('shopping-autocomplete', -1); e.preventDefault(); return; }
     if (e.key === 'Escape')    { hideAutocomplete('shopping-autocomplete'); return; }
     if (e.key === 'Enter') {
-      if (selectActiveAutocomplete('shopping-autocomplete')) return;
+      const selected = selectActiveAutocomplete('shopping-autocomplete');
+      console.log('[KEY] Enter — selectActive returned:', selected);
+      if (selected) return;
       window.addItem();
     }
   });
