@@ -752,7 +752,7 @@
   /* ── Autocomplete dropdown ── */
   .autocomplete-dropdown { position:fixed; z-index:1000; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.12); overflow:hidden; }
   .autocomplete-item { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; transition:background 0.12s; }
-  .autocomplete-item:hover, .autocomplete-item.active { background:var(--accent)10; }
+  .autocomplete-item:hover, .autocomplete-item.active { background:rgba(74,111,220,0.1); }
   .autocomplete-item-name { flex:1; font-size:0.92rem; }
   .autocomplete-item-cat { font-size:0.75rem; color:var(--muted); }
 
@@ -3673,14 +3673,12 @@
 
   function navigateAutocomplete(dropdownId, direction) {
     const el = document.getElementById(dropdownId);
-    console.log('[NAV] el:', el, 'display:', el?.style.display, 'items:', el?.querySelectorAll('.autocomplete-item').length);
     if (!el || el.style.display === 'none') return false;
     const items = el.querySelectorAll('.autocomplete-item');
     if (!items.length) return false;
     items.forEach(i => i.classList.remove('active'));
     if (_acActiveIndex + direction < 0) { _acActiveIndex = -1; return true; }
     _acActiveIndex = Math.min(_acActiveIndex + direction, items.length - 1);
-    console.log('[NAV] new index:', _acActiveIndex, 'item:', items[_acActiveIndex]);
     if (_acActiveIndex >= 0) items[_acActiveIndex].classList.add('active');
     return true;
   }
@@ -3916,9 +3914,7 @@
       hideAutocomplete('shopping-autocomplete');
       return;
     }
-    console.log('[AC] activeListId:', activeListId, 'history:', itemHistory[activeListId], 'query:', name);
     const suggestions = getHistorySuggestions(activeListId, name);
-    console.log('[AC] suggestions:', suggestions);
     showAutocomplete('shopping-autocomplete', suggestions, function(itemName, itemCat) {
       const input = document.getElementById('item-input');
       input.value = itemName;
@@ -3928,13 +3924,11 @@
     });
   });
   document.getElementById('item-input')?.addEventListener('keydown', e => {
-    console.log('[KEY]', e.key, '_acActiveIndex:', _acActiveIndex, 'dropdown visible:', document.getElementById('shopping-autocomplete')?.style.display);
     if (e.key === 'ArrowDown') { navigateAutocomplete('shopping-autocomplete', 1); e.preventDefault(); return; }
     if (e.key === 'ArrowUp')   { navigateAutocomplete('shopping-autocomplete', -1); e.preventDefault(); return; }
     if (e.key === 'Escape')    { hideAutocomplete('shopping-autocomplete'); return; }
     if (e.key === 'Enter') {
       const selected = selectActiveAutocomplete('shopping-autocomplete');
-      console.log('[KEY] Enter — selectActive returned:', selected);
       if (selected) return;
       window.addItem();
     }
