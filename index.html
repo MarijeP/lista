@@ -2778,13 +2778,18 @@
     }
     const dupe = findDuplicate(name);
     if (dupe) {
-      const label = dupe.checked ? 'already on your list (checked off)' : 'already on your list';
-      document.getElementById('dupe-warning-text').textContent = `"${dupe.name}" is ${label}.`;
-      const uncheckBtn = document.getElementById('dupe-uncheck-btn');
-      if (uncheckBtn) {
-        uncheckBtn.style.display = dupe.checked ? '' : 'none';
-        uncheckBtn.dataset.id = dupe.id;
+      if (dupe.checked) {
+        // Already checked off — just uncheck it silently
+        update(ref(db, `users/${auth.currentUser.uid}/shoppingList/${dupe.id}`), { checked: false });
+        showToast(`"${dupe.name}" moved back to list`);
+        input.value = '';
+        hideAutocomplete('shopping-autocomplete');
+        return;
       }
+      // Genuinely already on the list and unchecked — warn
+      document.getElementById('dupe-warning-text').textContent = `"${dupe.name}" is already on your list.`;
+      const uncheckBtn = document.getElementById('dupe-uncheck-btn');
+      if (uncheckBtn) uncheckBtn.style.display = 'none';
       window._dupeItem = dupe;
       document.getElementById('dupe-warning').style.display = 'flex';
       return;
