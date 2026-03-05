@@ -2858,7 +2858,8 @@
 
   function getCategoryDefault() {
     const cats = getCategoriesForList(activeListId);
-    return cats.length ? cats[0] : 'Other';
+    if (!cats.length) return 'Other';
+    return cats.find(c => c.toLowerCase() === 'other') || cats[0];
   }
 
   function renderCategorySelects() {
