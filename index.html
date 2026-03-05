@@ -3901,7 +3901,9 @@
       hideAutocomplete('shopping-autocomplete');
       return;
     }
+    console.log('[AC] activeListId:', activeListId, 'history:', itemHistory[activeListId], 'query:', name);
     const suggestions = getHistorySuggestions(activeListId, name);
+    console.log('[AC] suggestions:', suggestions);
     showAutocomplete('shopping-autocomplete', suggestions, function(itemName, itemCat) {
       const input = document.getElementById('item-input');
       input.value = itemName;
