@@ -761,12 +761,6 @@
   .scheduled-items.visible { display:block; }
 
   /* ── Edit modal schedule fields ── */
-  .schedule-date-row { display:flex; align-items:center; gap:4px; }
-  .schedule-date-part { width:52px; padding:9px 8px; border:1.5px solid var(--border); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.9rem; background:var(--surface); color:var(--text); text-align:center; outline:none; -moz-appearance:textfield; }
-  .schedule-date-part::-webkit-inner-spin-button, .schedule-date-part::-webkit-outer-spin-button { -webkit-appearance:none; }
-  .schedule-date-part:focus { border-color:var(--accent); }
-  .schedule-date-part.wide { width:72px; }
-  .schedule-date-sep { color:var(--muted); font-size:1rem; font-weight:500; }
   .schedule-section { margin-top:8px; border-top:1px solid var(--border); padding-top:16px; }
   .schedule-section-title { font-size:0.78rem; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px; }
   .schedule-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -1394,13 +1388,7 @@
       <div class="schedule-section-title">📅 Schedule</div>
       <div class="form-field" style="margin-bottom:10px">
         <label>Appear on</label>
-        <div class="schedule-date-row">
-          <input type="number" id="edit-schedule-dd" min="1" max="31" placeholder="DD" class="schedule-date-part">
-          <span class="schedule-date-sep">/</span>
-          <input type="number" id="edit-schedule-mm" min="1" max="12" placeholder="MM" class="schedule-date-part">
-          <span class="schedule-date-sep">/</span>
-          <input type="number" id="edit-schedule-yyyy" min="2024" max="2099" placeholder="YYYY" class="schedule-date-part wide">
-        </div>
+        <input type="date" id="edit-schedule-date">
       </div>
       <div class="form-field" style="margin-bottom:4px">
         <label>Repeat every</label>
@@ -3576,26 +3564,15 @@
 
   // ── Schedule helpers ─────────────────────────────────────────────────────────
   function getScheduleDateTs() {
-    const dd = parseInt(document.getElementById('edit-schedule-dd')?.value, 10);
-    const mm = parseInt(document.getElementById('edit-schedule-mm')?.value, 10);
-    const yyyy = parseInt(document.getElementById('edit-schedule-yyyy')?.value, 10);
-    if (!dd || !mm || !yyyy || yyyy < 2024) return null;
-    const d = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
-    if (isNaN(d.getTime())) return null;
-    return d.getTime();
+    const val = document.getElementById('edit-schedule-date')?.value;
+    if (!val) return null;
+    return new Date(val + 'T00:00:00').getTime();
   }
 
-  function populateScheduleDateFields(ts) {
-    if (!ts) {
-      document.getElementById('edit-schedule-dd').value = '';
-      document.getElementById('edit-schedule-mm').value = '';
-      document.getElementById('edit-schedule-yyyy').value = '';
-      return;
-    }
+  function toDateInputValue(ts) {
+    if (!ts) return '';
     const d = new Date(ts);
-    document.getElementById('edit-schedule-dd').value = d.getDate();
-    document.getElementById('edit-schedule-mm').value = d.getMonth() + 1;
-    document.getElementById('edit-schedule-yyyy').value = d.getFullYear();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   }
 
   function nextOccurrence(ts, scheduleAmount, scheduleUnit) {
@@ -3623,17 +3600,18 @@
   }
 
   function populateScheduleFields(item) {
+    const dateEl = document.getElementById('edit-schedule-date');
     const amountEl = document.getElementById('edit-schedule-amount');
     const unitEl = document.getElementById('edit-schedule-unit');
     const clearBtn = document.getElementById('clear-schedule-btn');
-    if (!amountEl || !unitEl) return;
+    if (!dateEl || !amountEl || !unitEl) return;
     if (item && item.scheduledDate) {
-      populateScheduleDateFields(item.scheduledDate);
+      dateEl.value = toDateInputValue(item.scheduledDate);
       amountEl.value = item.scheduleAmount || '';
       unitEl.value = item.scheduleUnit || 'days';
       if (clearBtn) clearBtn.style.display = '';
     } else {
-      populateScheduleDateFields(null);
+      dateEl.value = '';
       amountEl.value = '';
       unitEl.value = 'days';
       if (clearBtn) clearBtn.style.display = 'none';
@@ -3641,7 +3619,7 @@
   }
 
   window.clearSchedule = function() {
-    populateScheduleDateFields(null);
+    document.getElementById('edit-schedule-date').value = '';
     document.getElementById('edit-schedule-amount').value = '';
     document.getElementById('edit-schedule-unit').value = 'days';
     document.getElementById('clear-schedule-btn').style.display = 'none';
