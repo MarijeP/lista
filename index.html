@@ -804,6 +804,8 @@
   /* ── LISTS HOME ── */
   .lists-grid { display:flex; flex-direction:column; gap:12px; }
   /* ── Share button on list card ── */
+  .list-card-rename-btn { background:none; border:none; padding:6px 8px; font-size:0.95rem; color:var(--muted); cursor:pointer; border-radius:8px; transition:color 0.15s; flex-shrink:0; }
+  .list-card-rename-btn:hover { color:var(--accent); }
   .list-card-share-btn { background:none; border:1.5px solid var(--border); border-radius:8px; padding:5px 10px; font-size:0.75rem; font-family:'DM Sans',sans-serif; font-weight:500; color:var(--muted); cursor:pointer; transition:border-color 0.15s,color 0.15s; flex-shrink:0; white-space:nowrap; }
   .list-card-share-btn:hover { border-color:var(--accent); color:var(--accent); }
   .list-card-share-btn.is-shared { border-color:var(--accent)60; color:var(--accent); background:var(--accent)10; }
@@ -1369,6 +1371,21 @@
     <button class="btn-import-manual" onclick="closeUrlImportModal(); openNewRecipeForm()">Or enter recipe manually →</button>
   </div>
 </div>
+<!-- Rename list modal -->
+<div class="modal-overlay" id="rename-list-modal" onclick="closeRenameList(event)">
+  <div class="modal">
+    <h3>Rename list</h3>
+    <div class="form-field">
+      <label>List name</label>
+      <input type="text" id="rename-list-input" placeholder="List name…" maxlength="40">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="saveRenameList()">Save</button>
+      <button class="btn-secondary" onclick="closeRenameList()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Share list modal -->
 <div class="modal-overlay" id="share-modal" onclick="closeShareModal()">
   <div class="share-modal" onclick="event.stopPropagation()">
@@ -1862,6 +1879,7 @@
           <div class="list-card-meta">${list.type === 'shopping' ? 'Shopping list' : 'Generic list'}</div>
         </div>
         <button class="list-card-share-btn${isShared ? ' is-shared' : ''}" onclick="openShareModal(event,'${list.id}')">${isShared ? '👥 Shared' : 'Share'}</button>
+        <button class="list-card-rename-btn" onclick="openRenameList(event,'${list.id}','${escHtml(list.name).replace(/'/g,"\'")}')">✎</button>
         <span class="list-card-arrow">›</span>
       </div>`;
     }).join('');
@@ -1955,6 +1973,53 @@
       document.getElementById('list-view-generic').style.display = 'block';
       connectGenericListShared(sl.ownerUid, sl.listId);
     }
+  };
+
+  // ── Rename list ──────────────────────────────────────────────────────────────
+  let _renamingListId = null;
+
+  window.openRenameList = function(e, listId, currentName) {
+    e.stopPropagation();
+    _renamingListId = listId;
+    const input = document.getElementById('rename-list-input');
+    input.value = currentName;
+    document.getElementById('rename-list-modal').classList.add('open');
+    setTimeout(() => { input.select(); }, 50);
+  };
+
+  window.closeRenameList = function(e) {
+    if (e && e.target !== document.getElementById('rename-list-modal')) return;
+    document.getElementById('rename-list-modal').classList.remove('open');
+    _renamingListId = null;
+  };
+
+  window.saveRenameList = async function() {
+    const name = document.getElementById('rename-list-input').value.trim();
+    if (!name || !_renamingListId || !auth.currentUser) return;
+    const uid = auth.currentUser.uid;
+    const listId = _renamingListId;
+
+    // Update owner's list name
+    await update(ref(db, `users/${uid}/lists/${listId}`), { name });
+
+    // Update listName in every collaborator's sharedLists entry
+    const list = userLists.find(l => l.id === listId);
+    if (list && list.sharedWith) {
+      const updates = Object.keys(list.sharedWith).map(inviteeUid =>
+        update(ref(db, `users/${inviteeUid}/sharedLists/${listId}`), { listName: name })
+      );
+      await Promise.all(updates);
+    }
+
+    // Update the title if this list is currently open
+    const titleEl = document.getElementById(
+      list && list.type === 'generic' ? 'generic-list-title' : 'shopping-list-title'
+    );
+    if (titleEl && activeListId === listId) titleEl.textContent = name;
+
+    showToast('List renamed');
+    document.getElementById('rename-list-modal').classList.remove('open');
+    _renamingListId = null;
   };
 
   // ── Share modal ──────────────────────────────────────────────────────────────
@@ -3512,6 +3577,7 @@
   document.getElementById('generic-item-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addGenericItem(); });
   document.getElementById('new-store-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addStore(); });
   document.getElementById('share-invite-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.inviteCollaborator(); });
+  document.getElementById('rename-list-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.saveRenameList(); if (e.key === 'Escape') window.closeRenameList(); });
   document.getElementById('new-store-shortcut')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.addStore(); });
   document.getElementById('new-list-name')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.createNewList(); if (e.key === 'Escape') window.closeNewListModal(); });
 
